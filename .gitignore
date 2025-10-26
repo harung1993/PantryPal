@@ -1,0 +1,87 @@
+# PantryPal Root .gitignore
+
+# ===================================
+# CRITICAL: Never commit these files
+# ===================================
+
+# Persistent data (databases contain personal inventory)
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Environment variables and secrets
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# Notification preferences (may contain personal settings)
+notification_preferences.json
+
+# ===================================
+# Python Backend
+# ===================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# ===================================
+# Node.js / JavaScript
+# ===================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===================================
+# macOS
+# ===================================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ===================================
+# Docker
+# ===================================
+
+# Don't ignore docker-compose.yml or Dockerfiles
+# But ignore runtime data
+*.pid
+*.seed
+*.pid.lock
+
+# ===================================
+# Temporary files
+# ===================================
+
+*.tmp
+*.temp
+tmp/
+temp/
+.cache/
