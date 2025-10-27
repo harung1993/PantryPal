@@ -24,7 +24,7 @@ import {
   checkNotificationPermissions
 } from '../services/notificationService';
 
-const DEFAULT_API_URL = 'http://192.168.68.119:8000';
+const DEFAULT_API_URL = 'http://192.168.68.119';
 
 export default function SettingsScreen({ navigation }) {
   const [currentView, setCurrentView] = useState('menu');

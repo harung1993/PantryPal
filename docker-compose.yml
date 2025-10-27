@@ -1,44 +1,93 @@
 version: '3.8'
 
 services:
-  api-gateway:
-    build: ./services/api-gateway
-    container_name: pantrypal-api-gateway
+  # ===================================
+  # nginx Reverse Proxy
+  # ===================================
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: pantrypal-nginx
     ports:
-      - "8000:8000"
+      - "80:80"
     depends_on:
-      - inventory-service
-      - lookup-service
+      - api-gateway
+      - web-ui
+    networks:
+      - pantrypal-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # ===================================
+  # API Gateway
+  # ===================================
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: pantrypal-api-gateway
     environment:
       - INVENTORY_SERVICE_URL=http://inventory-service:8001
       - LOOKUP_SERVICE_URL=http://lookup-service:8002
+    volumes:
+      - ./data:/app/data
     networks:
       - pantrypal-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
+  # ===================================
+  # Inventory Service
+  # ===================================
   inventory-service:
-    build: ./services/inventory-service
-    container_name: pantrypal-inventory
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./data/inventory:/app/data
+    build:
+      context: ./services/inventory-service
+      dockerfile: Dockerfile
+    container_name: pantrypal-inventory-service
     environment:
-      - DATABASE_URL=sqlite:///data/inventory.db
+      - DATABASE_URL=sqlite:////app/data/inventory/inventory.db
+    volumes:
+      - ./data/inventory:/app/data/inventory
     networks:
       - pantrypal-network
     restart: unless-stopped
 
+  # ===================================
+  # Lookup Service
+  # ===================================
   lookup-service:
-    build: ./services/lookup-service
-    container_name: pantrypal-lookup
-    ports:
-      - "8002:8002"
-    volumes:
-      - ./data/lookup_cache:/app/data
+    build:
+      context: ./services/lookup-service
+      dockerfile: Dockerfile
+    container_name: pantrypal-lookup-service
     environment:
-      - CACHE_DB_PATH=/app/data/lookup_cache.db
+      - CACHE_DB_PATH=/app/data/lookup_cache/lookup_cache.db
       - CACHE_TTL_DAYS=30
+    volumes:
+      - ./data/lookup_cache:/app/data/lookup_cache
+    networks:
+      - pantrypal-network
+    restart: unless-stopped
+
+  # ===================================
+  # Web UI (React Dashboard)
+  # ===================================
+  web-ui:
+    build:
+      context: ./services/web-ui
+      dockerfile: Dockerfile
+    container_name: pantrypal-web-ui
+    environment:
+      - NODE_ENV=production
     networks:
       - pantrypal-network
     restart: unless-stopped
@@ -46,3 +95,7 @@ services:
 networks:
   pantrypal-network:
     driver: bridge
+
+volumes:
+  inventory_data:
+  lookup_cache_data:
