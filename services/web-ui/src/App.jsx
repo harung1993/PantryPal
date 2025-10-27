@@ -366,7 +366,7 @@ function App() {
         </div>
       </div>
 
-      <div style={{ padding: `0 ${spacing.xl} ${spacing.xl}` }}>
+      <div style={{ padding: `0 8px ${spacing.xl}` }}>
         {/* Stats Cards */}
         <div style={{
           display: 'grid',
