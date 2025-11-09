@@ -7,15 +7,78 @@ const getApiBaseUrl = () => {
   return localStorage.getItem('API_BASE_URL') || DEFAULT_API_URL;
 };
 
-// Create axios instance with dynamic base URL
+// Get API key from localStorage
+const getApiKey = () => {
+  return localStorage.getItem('API_KEY') || null;
+};
+
+// Set API key in localStorage
+export const setApiKey = (apiKey) => {
+  if (apiKey && apiKey.trim()) {
+    localStorage.setItem('API_KEY', apiKey.trim());
+  } else {
+    localStorage.removeItem('API_KEY');
+  }
+};
+
+// Remove API key
+export const removeApiKey = () => {
+  localStorage.removeItem('API_KEY');
+};
+
+// Create axios instance with dynamic base URL and API key
 const createApiInstance = () => {
-  return axios.create({
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  // Add API key header if available
+  const apiKey = getApiKey();
+  if (apiKey) {
+    headers['X-API-Key'] = apiKey;
+  }
+  
+  const instance = axios.create({
     baseURL: getApiBaseUrl(),
     timeout: 10000,
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
   });
+
+  // Add response interceptor to handle 401 errors
+  instance.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response && error.response.status === 401) {
+        // API key missing or invalid
+        const message = error.response.data?.detail || 'Authentication required';
+        console.error('Authentication error:', message);
+        
+        // You could redirect to settings or show a modal here
+        // For now, just alert the user
+        if (apiKey) {
+          alert('⚠️ Authentication Failed\n\nYour API key is invalid or expired. Please update it in Settings → Connection.');
+          removeApiKey();
+        } else {
+          alert('🔐 Authentication Required\n\nThis server requires an API key. Please add one in Settings → Connection.');
+        }
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  return instance;
+};
+
+// Check authentication status
+export const checkAuthStatus = async () => {
+  const api = createApiInstance();
+  try {
+    const response = await api.get('/api/auth/status');
+    return response.data;
+  } catch (error) {
+    console.error('Failed to check auth status:', error);
+    return { auth_mode: 'unknown', requires_api_key: false };
+  }
 };
 
 export const getItems = async (location = null, search = null) => {

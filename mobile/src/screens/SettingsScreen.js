@@ -32,6 +32,8 @@ export default function SettingsScreen({ navigation }) {
   const [apiUrl, setApiUrl] = useState('');
   const [originalUrl, setOriginalUrl] = useState('');
   const [testing, setTesting] = useState(false);
+  const [currentApiKey, setCurrentApiKey] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   
   const [locations, setLocations] = useState([]);
   const [categories, setCategories] = useState([]);

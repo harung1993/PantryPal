@@ -8,6 +8,8 @@ function SettingsPage({ onBack }) {
   const [apiUrl, setApiUrl] = useState('');
   const [savedUrl, setSavedUrl] = useState('');
   const [testing, setTesting] = useState(false);
+  const [currentApiKey, setCurrentApiKey] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   
   const [locations, setLocations] = useState(DEFAULT_LOCATIONS);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
@@ -36,9 +38,14 @@ function SettingsPage({ onBack }) {
   const [loadingKeys, setLoadingKeys] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('API_BASE_URL') || 'http://localhost:8000';
+    const stored = localStorage.getItem('API_BASE_URL') || 'http://localhost';
     setApiUrl(stored);
     setSavedUrl(stored);
+    
+    // Load API key
+    const savedApiKey = localStorage.getItem('API_KEY');
+    setCurrentApiKey(savedApiKey || '');
+    setShowApiKeyInput(!!savedApiKey);
     
     setLocations(getDefaultLocations());
     setCategories(getDefaultCategories());
@@ -166,12 +173,20 @@ function SettingsPage({ onBack }) {
 
     localStorage.setItem('API_BASE_URL', cleanUrl);
     setSavedUrl(cleanUrl);
+    
+    // Save API key if provided
+    if (currentApiKey.trim()) {
+      localStorage.setItem('API_KEY', currentApiKey.trim());
+    } else {
+      localStorage.removeItem('API_KEY');
+    }
+    
     alert('✅ Connection settings saved!\n\nPlease refresh the page for changes to take effect.');
   };
 
   const resetToDefault = () => {
-    if (window.confirm('Reset API URL to default (http://localhost:8000)?')) {
-      setApiUrl('http://localhost:8000');
+    if (window.confirm('Reset API URL to default (http://localhost)?')) {
+      setApiUrl('http://localhost');
     }
   };
 
@@ -524,8 +539,107 @@ function SettingsPage({ onBack }) {
                 color: colors.textSecondary,
                 margin: `${spacing.sm} 0`,
               }}>
-                Examples: http://192.168.68.119:8000, http://macmini.local:8000
+                Examples: http://192.168.68.119, http://macmini.local
               </p>
+            </div>
+
+            {/* API Key Section */}
+            <div style={{
+              marginTop: spacing.xl,
+              paddingTop: spacing.xl,
+              borderTop: `2px solid ${colors.border}`,
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: spacing.md,
+              }}>
+                <label style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}>
+                  Use API Key (Optional)
+                </label>
+                <button
+                  onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                  style={{
+                    padding: `${spacing.sm} ${spacing.md}`,
+                    borderRadius: borderRadius.md,
+                    border: 'none',
+                    backgroundColor: showApiKeyInput ? colors.primary : colors.border,
+                    color: showApiKeyInput ? colors.textPrimary : colors.textSecondary,
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                  }}
+                >
+                  {showApiKeyInput ? '🔒 Enabled' : '🔓 Disabled'}
+                </button>
+              </div>
+
+              {showApiKeyInput && (
+                <div>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: spacing.sm,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                    fontSize: '16px',
+                  }}>
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={currentApiKey}
+                    onChange={(e) => setCurrentApiKey(e.target.value)}
+                    placeholder="pp_xxxxxxxxxxxxxxxxxxxxxxxx"
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      fontSize: '16px',
+                      marginBottom: spacing.sm,
+                      backgroundColor: '#ffffff',
+                      color: colors.textPrimary,
+                      fontFamily: 'monospace',
+                    }}
+                  />
+                  <p style={{ 
+                    fontSize: '14px', 
+                    color: colors.textSecondary,
+                    margin: `${spacing.sm} 0`,
+                  }}>
+                    💡 Required if server has AUTH_MODE=api_key_only or AUTH_MODE=full<br/>
+                    Generate keys in Settings → API Keys tab
+                  </p>
+                  {currentApiKey && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Remove saved API key?')) {
+                          localStorage.removeItem('API_KEY');
+                          setCurrentApiKey('');
+                          alert('API key removed');
+                        }
+                      }}
+                      style={{
+                        padding: spacing.md,
+                        borderRadius: borderRadius.md,
+                        border: 'none',
+                        background: colors.error,
+                        color: colors.card,
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        marginTop: spacing.sm,
+                      }}
+                    >
+                      🗑️ Clear API Key
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ 
