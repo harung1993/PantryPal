@@ -8,8 +8,9 @@ const getApi = async () => {
   if (!apiInstance) {
     const baseURL = await getApiBaseUrl();
     
-    // Get stored API key
+    // Get stored API key and session token
     const apiKey = await AsyncStorage.getItem('API_KEY');
+    const sessionToken = await AsyncStorage.getItem('SESSION_TOKEN');
     
     const headers = {
       'Content-Type': 'application/json',
@@ -18,6 +19,11 @@ const getApi = async () => {
     // Add API key header if available
     if (apiKey) {
       headers['X-API-Key'] = apiKey;
+    }
+    
+    // Add session cookie if available
+    if (sessionToken) {
+      headers['Cookie'] = `session_token=${sessionToken}`;
     }
     
     apiInstance = axios.create({
@@ -31,17 +37,19 @@ const getApi = async () => {
       (response) => response,
       async (error) => {
         if (error.response && error.response.status === 401) {
-          // API key missing or invalid
+          // API key or session missing/invalid
           const message = error.response.data?.detail || 'Authentication required';
           
-          // You could show an alert here or handle it in the UI
           console.error('Authentication error:', message);
           
-          // Clear invalid API key
+          // Clear invalid credentials
           if (apiKey) {
             await AsyncStorage.removeItem('API_KEY');
-            apiInstance = null; // Reset instance
           }
+          if (sessionToken) {
+            await AsyncStorage.removeItem('SESSION_TOKEN');
+          }
+          apiInstance = null; // Reset instance
         }
         return Promise.reject(error);
       }

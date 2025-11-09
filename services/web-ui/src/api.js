@@ -42,24 +42,22 @@ const createApiInstance = () => {
     baseURL: getApiBaseUrl(),
     timeout: 10000,
     headers,
+    withCredentials: true,  // Important! Include cookies (session token)
   });
 
   // Add response interceptor to handle 401 errors
+  // Note: We don't show alerts here - let the component handle auth errors
   instance.interceptors.response.use(
     (response) => response,
     (error) => {
       if (error.response && error.response.status === 401) {
-        // API key missing or invalid
+        // API key or session missing/invalid
         const message = error.response.data?.detail || 'Authentication required';
         console.error('Authentication error:', message);
         
-        // You could redirect to settings or show a modal here
-        // For now, just alert the user
-        if (apiKey) {
-          alert('⚠️ Authentication Failed\n\nYour API key is invalid or expired. Please update it in Settings → Connection.');
+        // Clear invalid credentials silently
+        if (getApiKey()) {
           removeApiKey();
-        } else {
-          alert('🔐 Authentication Required\n\nThis server requires an API key. Please add one in Settings → Connection.');
         }
       }
       return Promise.reject(error);

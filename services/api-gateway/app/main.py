@@ -9,6 +9,7 @@ from pydantic import BaseModel
 # Import auth modules
 from .auth import get_current_auth, require_admin
 from . import auth_db, user_db
+from .email_service import send_password_reset_email, send_welcome_email, is_email_configured
 
 app = FastAPI(title="PantryPal API Gateway", version="2.0.0")
 
@@ -17,7 +18,12 @@ AUTH_MODE = os.getenv("AUTH_MODE", "none").lower()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost",
+        "http://localhost:5173",
+        "http://127.0.0.1",
+        "http://192.168.68.119",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,6 +80,13 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 # ============================================================================
 # PUBLIC ENDPOINTS (No authentication required)
 # ============================================================================
@@ -106,11 +119,14 @@ async def health_check():
 
 @app.get("/api/auth/status")
 async def auth_status():
-    """Get current authentication mode and whether user is logged in"""
+    """Get current authentication mode and configuration"""
+    allow_registration = os.getenv("ALLOW_REGISTRATION", "true").lower() == "true"
     return {
         "auth_mode": AUTH_MODE,
-        "requires_login": AUTH_MODE == "full",
-        "requires_api_key": AUTH_MODE in ["api_key_only", "full"]
+        "requires_login": AUTH_MODE in ["full", "smart"],
+        "requires_api_key": AUTH_MODE in ["api_key_only"],
+        "allow_registration": allow_registration,
+        "email_configured": is_email_configured()
     }
 
 # ============================================================================
@@ -119,11 +135,11 @@ async def auth_status():
 
 @app.post("/api/auth/login")
 async def login(request: LoginRequest, response: Response, http_request: Request):
-    """Login with username and password (only works in 'full' mode)"""
-    if AUTH_MODE != "full":
+    """Login with username and password (works in 'full' or 'smart' mode)"""
+    if AUTH_MODE not in ["full", "smart"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Login not available in '{AUTH_MODE}' mode. Set AUTH_MODE=full to enable."
+            detail=f"Login not available in '{AUTH_MODE}' mode. Set AUTH_MODE=full or smart to enable."
         )
     
     user = user_db.authenticate_user(request.username, request.password)
@@ -177,11 +193,26 @@ async def logout(response: Response, auth = Depends(get_current_auth)):
 
 @app.post("/api/auth/register")
 async def register(request: RegisterRequest, response: Response, http_request: Request):
-    """Register a new user (only works in 'full' mode)"""
-    if AUTH_MODE != "full":
+    """Register a new user (only works in 'full' or 'smart' mode)"""
+    if AUTH_MODE not in ["full", "smart"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Registration not available in '{AUTH_MODE}' mode. Set AUTH_MODE=full to enable."
+            detail=f"Registration not available in '{AUTH_MODE}' mode. Set AUTH_MODE=full or smart to enable."
+        )
+    
+    # Check if registration is allowed
+    allow_registration = os.getenv("ALLOW_REGISTRATION", "true").lower() == "true"
+    if not allow_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is currently disabled. Contact your administrator."
+        )
+    
+    # Require email for registration
+    if not request.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is required for registration"
         )
     
     try:
@@ -192,6 +223,15 @@ async def register(request: RegisterRequest, response: Response, http_request: R
             full_name=request.full_name,
             is_admin=False
         )
+        
+        # Send welcome email if email is configured
+        if is_email_configured():
+            try:
+                base_url = http_request.url.scheme + "://" + http_request.url.netloc
+                send_welcome_email(request.email, request.username, base_url)
+            except Exception as e:
+                print(f"Failed to send welcome email: {e}")
+                # Don't fail registration if email fails
         
         # Auto-login after registration
         ip_address = http_request.client.host if http_request.client else None
@@ -229,8 +269,8 @@ async def get_current_user(auth = Depends(get_current_auth)):
 @app.post("/api/auth/change-password")
 async def change_password(request: ChangePasswordRequest, auth = Depends(get_current_auth)):
     """Change password for current user"""
-    if AUTH_MODE != "full":
-        raise HTTPException(status_code=400, detail="Password change only available in 'full' mode")
+    if AUTH_MODE not in ["full", "smart"]:
+        raise HTTPException(status_code=400, detail="Password change only available in 'full' or 'smart' mode")
     
     if auth.get("type") != "session":
         raise HTTPException(status_code=400, detail="Password change only available for logged-in users")
@@ -247,6 +287,59 @@ async def change_password(request: ChangePasswordRequest, auth = Depends(get_cur
         return {"message": "Password changed successfully"}
     else:
         raise HTTPException(status_code=500, detail="Failed to change password")
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, http_request: Request):
+    """Request password reset email"""
+    if AUTH_MODE not in ["full", "smart"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset not available in current auth mode"
+        )
+    
+    if not is_email_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email service not configured. Contact your administrator."
+        )
+    
+    # Create reset token (returns None if user not found - don't reveal this)
+    token = user_db.create_password_reset_token(request.email)
+    
+    if token:
+        try:
+            base_url = http_request.url.scheme + "://" + http_request.url.netloc
+            send_password_reset_email(request.email, token, base_url)
+        except Exception as e:
+            print(f"Failed to send reset email: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send reset email. Please try again later."
+            )
+    
+    # Always return success (don't reveal if email exists)
+    return {
+        "message": "If that email is registered, you'll receive a password reset link shortly."
+    }
+
+@app.post("/api/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Reset password using token from email"""
+    if AUTH_MODE not in ["full", "smart"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset not available in current auth mode"
+        )
+    
+    success = user_db.use_reset_token(request.token, request.new_password)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    return {"message": "Password reset successful. You can now login with your new password."}
 
 # ============================================================================
 # API KEY MANAGEMENT ENDPOINTS

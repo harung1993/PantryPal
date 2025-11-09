@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { getDefaultLocations, getDefaultCategories } from './defaults';
-import { getItems, deleteItem, addItemManual, updateItem } from './api';
+import { getItems, deleteItem, addItemManual, updateItem, checkAuthStatus } from './api';
 import { colors, gradients, spacing, borderRadius, shadows } from './colors';
 import SettingsPage from './SettingsPage';
+import LandingPage from './LandingPage';
+import ResetPasswordPage from './ResetPasswordPage';
 import './App.css';
 
 function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authMode, setAuthMode] = useState('none');
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [showLanding, setShowLanding] = useState(false);
+  
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -24,9 +31,94 @@ function App() {
     notes: '',
   });
 
+  // Check for password reset token in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const resetToken = urlParams.get('token');
+
   useEffect(() => {
-    loadItems();
-  }, [search]);
+    checkAuthentication();
+  }, []);
+
+  useEffect(() => {
+    if (!showLanding && !resetToken) {
+      loadItems();
+    }
+  }, [search, showLanding, resetToken]);
+
+  const checkAuthentication = async () => {
+    try {
+      const status = await checkAuthStatus();
+      setAuthMode(status.auth_mode);
+      
+      // Check if we need to show landing page
+      if (status.auth_mode === 'full') {
+        // In full mode, always require login from external networks
+        try {
+          const response = await fetch('/api/auth/me', { credentials: 'include' });
+          if (response.ok) {
+            const data = await response.json();
+            setCurrentUser(data);
+            setShowLanding(false);
+          } else {
+            setShowLanding(true);
+          }
+        } catch {
+          setShowLanding(true);
+        }
+      } else if (status.auth_mode === 'smart') {
+        // In smart mode, check if we're authenticated
+        try {
+          const response = await fetch('/api/auth/me', { credentials: 'include' });
+          if (response.ok) {
+            const data = await response.json();
+            setCurrentUser(data);
+            // If trusted network, don't show landing
+            if (data.type === 'trusted_network') {
+              setShowLanding(false);
+            } else {
+              setShowLanding(false); // Has valid session
+            }
+          } else {
+            // 401 - Not authenticated
+            // Try to access items to see if on trusted network
+            try {
+              await getItems();
+              setShowLanding(false); // Can access without auth (trusted network)
+            } catch (itemError) {
+              setShowLanding(true); // Can't access, need to login
+            }
+          }
+        } catch (error) {
+          // Network error, try accessing items
+          try {
+            await getItems();
+            setShowLanding(false);
+          } catch {
+            setShowLanding(true);
+          }
+        }
+      } else {
+        // none or api_key_only mode
+        setShowLanding(false);
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      setShowLanding(false);
+    } finally {
+      setCheckingAuth(false);
+    }
+  };
+
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
+    setShowLanding(false);
+  };
+
+  const handleResetSuccess = () => {
+    // Clear token from URL and show login
+    window.history.replaceState({}, document.title, window.location.pathname);
+    setShowLanding(true);
+  };
 
   const loadItems = async () => {
     try {
@@ -43,7 +135,10 @@ function App() {
       setItems(sorted);
     } catch (error) {
       console.error('Failed to load items:', error);
-      alert('Failed to load items. Check Settings to configure backend URL.');
+      // Don't alert if it's just an auth error
+      if (error.response?.status !== 401) {
+        alert('Failed to load items. Check Settings to configure backend URL.');
+      }
     } finally {
       setLoading(false);
     }
@@ -87,15 +182,7 @@ function App() {
 
   const handleAdd = async () => {
     try {
-      await addItemManual(
-        formData.name,
-        formData.brand,
-        formData.category,
-        formData.location,
-        formData.quantity,
-        formData.expiry_date || null,
-        formData.notes
-      );
+      await addItemManual(formData);
       setShowAddModal(false);
       setFormData({
         name: '',
@@ -151,15 +238,9 @@ function App() {
   };
 
   const renderTable = (itemsToRender) => (
-    <table style={{
-      width: '100%',
-      borderCollapse: 'collapse',
-    }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead>
-        <tr style={{
-          background: gradients.primary,
-          color: 'white',
-        }}>
+        <tr style={{ background: gradients.primary, color: 'white' }}>
           <th style={styles.th}>Item</th>
           <th style={styles.th}>Brand</th>
           <th style={styles.th}>Category</th>
@@ -221,21 +302,10 @@ function App() {
                 ) : '-'}
               </td>
               <td style={styles.td}>
-                <GradientButton
-                  small
-                  onClick={() => handleEdit(item)}
-                  style={{ marginRight: '8px' }}
-                >
+                <GradientButton small onClick={() => handleEdit(item)} style={{ marginRight: '8px' }}>
                   ✏️ Edit
                 </GradientButton>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  style={{
-                    ...styles.deleteButton,
-                    padding: '6px 12px',
-                    fontSize: '14px',
-                  }}
-                >
+                <button onClick={() => handleDelete(item.id)} style={{ ...styles.deleteButton, padding: '6px 12px', fontSize: '14px' }}>
                   🗑️ Delete
                 </button>
               </td>
@@ -276,12 +346,42 @@ function App() {
     return { total, expiring, expired };
   };
 
-  const stats = getStats();
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: gradients.warm,
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '64px', marginBottom: spacing.md }}>🥫</div>
+          <div style={{ fontSize: '20px', color: colors.textSecondary }}>Loading PantryPal...</div>
+        </div>
+      </div>
+    );
+  }
 
+  // Show password reset page if token in URL
+  if (resetToken) {
+    return <ResetPasswordPage token={resetToken} onSuccess={handleResetSuccess} />;
+  }
+
+  // Show landing page if auth required and not logged in
+  if (showLanding) {
+    return <LandingPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Show settings page
   if (showSettings) {
     return <SettingsPage onBack={() => setShowSettings(false)} />;
   }
 
+  const stats = getStats();
+
+  // Main dashboard
   return (
     <div style={{
       background: gradients.warm,
@@ -303,23 +403,53 @@ function App() {
         }}>
           <div>
             <h1 style={{ margin: 0, fontSize: '32px' }}>🥫 PantryPal Dashboard</h1>
-            <p style={{ margin: '8px 0 0 0', opacity: 0.9 }}>Your Smart Pantry Assistant</p>
+            <p style={{ margin: '8px 0 0 0', opacity: 0.9 }}>
+              Your Smart Pantry Assistant
+              {currentUser && currentUser.username && ` • ${currentUser.username}`}
+            </p>
           </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            style={{
-              background: 'rgba(255, 255, 255, 0.2)',
-              border: 'none',
-              borderRadius: borderRadius.md,
-              padding: `${spacing.md} ${spacing.lg}`,
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: 'bold',
-            }}
-          >
-            ⚙️ Settings
-          </button>
+          <div style={{ display: 'flex', gap: spacing.md }}>
+            <button
+              onClick={() => setShowSettings(true)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                border: 'none',
+                borderRadius: borderRadius.md,
+                padding: `${spacing.md} ${spacing.lg}`,
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold',
+              }}
+            >
+              ⚙️ Settings
+            </button>
+            {currentUser && currentUser.type === 'session' && (
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+                    setCurrentUser(null);
+                    setShowLanding(true);
+                  } catch (error) {
+                    console.error('Logout failed:', error);
+                  }
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  border: 'none',
+                  borderRadius: borderRadius.md,
+                  padding: `${spacing.md} ${spacing.lg}`,
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                }}
+              >
+                🚪 Logout
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards with Gradients */}
@@ -397,6 +527,12 @@ function App() {
             {loading ? (
               <div style={{ padding: spacing.xl, textAlign: 'center', color: colors.textSecondary }}>
                 Loading...
+              </div>
+            ) : items.length === 0 ? (
+              <div style={{ padding: spacing.xl, textAlign: 'center', color: colors.textSecondary }}>
+                <div style={{ fontSize: '48px', marginBottom: spacing.md }}>📦</div>
+                <div style={{ fontSize: '18px', marginBottom: spacing.sm }}>No items yet</div>
+                <div>Add your first item to get started!</div>
               </div>
             ) : (
               renderTable(items)
@@ -510,7 +646,7 @@ function StatCard({ icon, label, value, color }) {
   );
 }
 
-// Modal Component (unchanged, works with new colors)
+// Modal Component
 function Modal({ title, formData, setFormData, onSave, onCancel }) {
   const [locations, setLocations] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -544,7 +680,83 @@ function Modal({ title, formData, setFormData, onSave, onCancel }) {
       }}>
         <h2 style={{ marginTop: 0, color: colors.textPrimary }}>{title}</h2>
         
-        {/* Form fields... (rest of modal implementation) */}
+        <div style={{ marginBottom: spacing.md }}>
+          <label style={styles.label}>Name *</label>
+          <input
+            type="text"
+            required
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            style={styles.input}
+          />
+        </div>
+
+        <div style={{ marginBottom: spacing.md }}>
+          <label style={styles.label}>Brand</label>
+          <input
+            type="text"
+            value={formData.brand}
+            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+            style={styles.input}
+          />
+        </div>
+
+        <div style={{ marginBottom: spacing.md }}>
+          <label style={styles.label}>Category *</label>
+          <select
+            value={formData.category}
+            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+            style={styles.input}
+          >
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: spacing.md }}>
+          <label style={styles.label}>Location *</label>
+          <select
+            value={formData.location}
+            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            style={styles.input}
+          >
+            {locations.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: spacing.md }}>
+          <label style={styles.label}>Quantity *</label>
+          <input
+            type="number"
+            min="1"
+            value={formData.quantity}
+            onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
+            style={styles.input}
+          />
+        </div>
+
+        <div style={{ marginBottom: spacing.md }}>
+          <label style={styles.label}>Expiry Date</label>
+          <input
+            type="date"
+            value={formData.expiry_date}
+            onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
+            style={styles.input}
+          />
+        </div>
+
+        <div style={{ marginBottom: spacing.lg }}>
+          <label style={styles.label}>Notes</label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            rows={3}
+            style={{ ...styles.input, resize: 'vertical' }}
+          />
+        </div>
         
         <div style={{ display: 'flex', gap: spacing.md, marginTop: spacing.lg }}>
           <GradientButton onClick={onSave} style={{ flex: 1 }}>
@@ -584,6 +796,19 @@ const styles = {
     cursor: 'pointer',
     fontSize: '16px',
     fontWeight: 'bold',
+  },
+  label: {
+    display: 'block',
+    marginBottom: spacing.sm,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  input: {
+    width: '100%',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    border: `1px solid ${colors.border}`,
+    fontSize: '16px',
   },
 };
 
