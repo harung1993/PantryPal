@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { addItem } from '../services/api';
@@ -70,143 +71,182 @@ export default function AddItemScreen({ route, navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Header with Gradient */}
+      <LinearGradient
+        colors={[colors.primary, colors.secondary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-      </View>
+        <Text style={styles.title}>Add Item</Text>
+        <View style={{ width: 60 }} />
+      </LinearGradient>
 
-      <View style={styles.successBanner}>
-        <Text style={styles.successEmoji}>✨</Text>
-        <Text style={styles.successText}>Found Product!</Text>
-      </View>
-
-      {productInfo.image_url && (
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: productInfo.image_url }}
-            style={styles.productImage}
-            resizeMode="contain"
-          />
-        </View>
-      )}
-
-      <View style={styles.infoCard}>
-        <Text style={styles.productName}>{productInfo.name}</Text>
-        {productInfo.brand && (
-          <Text style={styles.productBrand}>Brand: {productInfo.brand}</Text>
-        )}
-        {productInfo.category && (
-          <Text style={styles.productCategory}>Category: {productInfo.category}</Text>
-        )}
-        {productInfo.source && (
-          <Text style={styles.productSource}>Source: {productInfo.source}</Text>
-        )}
-      </View>
-
-      <View style={styles.inputCard}>
-        <Text style={styles.label}>📍 Location</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={location}
-            onValueChange={(itemValue) => setLocation(itemValue)}
-            style={styles.picker}
+      <ScrollView style={styles.content}>
+        {/* Product Info Card with Gradient Border */}
+        <View style={styles.gradientBorderWrapper}>
+          <LinearGradient
+            colors={[colors.primary, colors.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.gradientBorder}
           >
-            {locations.map((loc) => (
-              <Picker.Item key={loc} label={loc} value={loc} />
-            ))}
-          </Picker>
+            <View style={styles.productCard}>
+              {productInfo.image_url && (
+                <Image
+                  source={{ uri: productInfo.image_url }}
+                  style={styles.productImage}
+                  resizeMode="contain"
+                />
+              )}
+              <Text style={styles.productName}>{productInfo.name}</Text>
+              {productInfo.brand && (
+                <Text style={styles.productBrand}>Brand: {productInfo.brand}</Text>
+              )}
+              {productInfo.category && (
+                <View style={styles.categoryBadge}>
+                  <Text style={styles.categoryText}>{productInfo.category}</Text>
+                </View>
+              )}
+            </View>
+          </LinearGradient>
         </View>
-      </View>
 
-      <View style={styles.inputCard}>
-        <Text style={styles.label}># Quantity</Text>
-        <View style={styles.quantityContainer}>
-          <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={() => setQuantity(Math.max(1, quantity - 1))}
-          >
-            <Text style={styles.quantityButtonText}>➖</Text>
-          </TouchableOpacity>
+        {/* Location Picker */}
+        <View style={styles.inputCard}>
+          <Text style={styles.label}>📍 Location</Text>
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={location}
+              onValueChange={(itemValue) => setLocation(itemValue)}
+              style={styles.picker}
+            >
+              {locations.map((loc) => (
+                <Picker.Item key={loc} label={loc} value={loc} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+
+        {/* Quantity */}
+        <View style={styles.inputCard}>
+          <Text style={styles.label}># Quantity</Text>
+          <View style={styles.quantityContainer}>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => setQuantity(Math.max(1, quantity - 1))}
+            >
+              <Text style={styles.quantityButtonText}>➖</Text>
+            </TouchableOpacity>
+            
+            <TextInput
+              style={styles.quantityInput}
+              value={String(quantity)}
+              onChangeText={(text) => {
+                const num = parseInt(text) || 1;
+                setQuantity(Math.max(1, num));
+              }}
+              keyboardType="number-pad"
+            />
+            
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => setQuantity(quantity + 1)}
+            >
+              <Text style={styles.quantityButtonText}>➕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Expiry Date */}
+        <View style={styles.inputCard}>
+          <Text style={styles.label}>📅 Expiry Date (optional)</Text>
           
-          <TextInput
-            style={styles.quantityInput}
-            value={String(quantity)}
-            onChangeText={(text) => {
-              const num = parseInt(text) || 1;
-              setQuantity(Math.max(1, num));
-            }}
-            keyboardType="number-pad"
-          />
-          
+          {expiryDate && (
+            <Text style={styles.selectedDate}>
+              Selected: {expiryDate.toLocaleDateString()}
+            </Text>
+          )}
+
+          <View style={styles.quickDateContainer}>
+            <TouchableOpacity
+              style={styles.quickDateButton}
+              onPress={() => setQuickDate(7)}
+            >
+              <Text style={styles.quickDateText}>+7d</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickDateButton}
+              onPress={() => setQuickDate(30)}
+            >
+              <Text style={styles.quickDateText}>+1m</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickDateButton}
+              onPress={() => setQuickDate(180)}
+            >
+              <Text style={styles.quickDateText}>+6m</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickDateButton}
+              onPress={() => setQuickDate(365)}
+            >
+              <Text style={styles.quickDateText}>+1y</Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
-            style={styles.quantityButton}
-            onPress={() => setQuantity(quantity + 1)}
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
           >
-            <Text style={styles.quantityButtonText}>➕</Text>
+            <Text style={styles.dateButtonText}>
+              {expiryDate ? 'Change Date' : 'Select Date'}
+            </Text>
           </TouchableOpacity>
-        </View>
-      </View>
 
-      <View style={styles.inputCard}>
-        <Text style={styles.label}>📅 Expiry Date (optional)</Text>
-        
-        <View style={styles.quickDateButtons}>
-          <TouchableOpacity style={styles.quickDateButton} onPress={() => setQuickDate(7)}>
-            <Text style={styles.quickDateText}>+7d</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickDateButton} onPress={() => setQuickDate(30)}>
-            <Text style={styles.quickDateText}>+1m</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickDateButton} onPress={() => setQuickDate(180)}>
-            <Text style={styles.quickDateText}>+6m</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickDateButton} onPress={() => setQuickDate(365)}>
-            <Text style={styles.quickDateText}>+1y</Text>
-          </TouchableOpacity>
+          {expiryDate && (
+            <TouchableOpacity
+              style={styles.clearDateButton}
+              onPress={() => setExpiryDate(null)}
+            >
+              <Text style={styles.clearDateText}>Clear Date</Text>
+            </TouchableOpacity>
+          )}
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={expiryDate || new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              minimumDate={new Date()}
+            />
+          )}
         </View>
 
-        <TouchableOpacity
-          style={styles.datePickerButton}
-          onPress={() => setShowDatePicker(true)}
+        {/* Gradient Save Button */}
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.saveButtonGradient}
         >
-          <Text style={styles.datePickerText}>
-            {expiryDate ? expiryDate.toLocaleDateString() : 'Tap to select date'}
-          </Text>
-          <Text style={styles.datePickerIcon}>📅</Text>
-        </TouchableOpacity>
-
-        {expiryDate && (
           <TouchableOpacity
-            style={styles.clearDateButton}
-            onPress={() => setExpiryDate(null)}
+            style={styles.saveButton}
+            onPress={handleAdd}
+            disabled={loading}
           >
-            <Text style={styles.clearDateText}>✕ Clear date</Text>
+            <Text style={styles.saveButtonText}>
+              {loading ? 'Adding...' : '💾 Add to Pantry'}
+            </Text>
           </TouchableOpacity>
-        )}
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={expiryDate || new Date()}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleDateChange}
-            minimumDate={new Date()}
-          />
-        )}
-      </View>
-
-      <TouchableOpacity
-        style={[styles.addButton, loading && styles.addButtonDisabled]}
-        onPress={handleAdd}
-        disabled={loading}
-      >
-        <Text style={styles.addButtonText}>
-          {loading ? 'Adding...' : 'Add to Pantry'}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
+        </LinearGradient>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -215,101 +255,90 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
-    padding: spacing.lg,
-    paddingTop: 60,
-  },
   header: {
-    marginBottom: spacing.lg,
+    paddingTop: 50,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   backText: {
-    fontSize: 18,
-    color: colors.textPrimary,
+    fontSize: 16,
+    color: '#ffffff',
     fontWeight: '600',
   },
-  successBanner: {
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    ...shadows.small,
-  },
-  successEmoji: {
-    fontSize: 40,
-    marginBottom: spacing.xs,
-  },
-  successText: {
+  title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: '#ffffff',
   },
-  imageContainer: {
-    backgroundColor: colors.card,
+  content: {
+    flex: 1,
+    padding: spacing.lg,
+  },
+  gradientBorderWrapper: {
+    marginBottom: spacing.lg,
+  },
+  gradientBorder: {
     borderRadius: borderRadius.lg,
+    padding: 2,
+  },
+  productCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg - 2,
     padding: spacing.lg,
     alignItems: 'center',
-    marginBottom: spacing.lg,
-    ...shadows.small,
   },
   productImage: {
-    width: 200,
-    height: 200,
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
-    ...shadows.small,
+    width: 150,
+    height: 150,
+    marginBottom: spacing.md,
   },
   productName: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.textPrimary,
-    marginBottom: spacing.xs,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   productBrand: {
     fontSize: 16,
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  productCategory: {
-    fontSize: 16,
-    color: colors.accent,
-    marginBottom: spacing.xs,
+  categoryBadge: {
+    backgroundColor: colors.lightBackground,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.sm,
   },
-  productSource: {
+  categoryText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.textDark,
+    fontWeight: '600',
   },
   inputCard: {
     backgroundColor: colors.card,
-    padding: spacing.lg,
     borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     ...shadows.small,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    fontSize: 16,
-    color: colors.textPrimary,
+    marginBottom: spacing.md,
   },
   pickerContainer: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.lightBackground,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
   },
   picker: {
-    color: colors.textPrimary,
+    height: 50,
   },
   quantityContainer: {
     flexDirection: 'row',
@@ -318,84 +347,88 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   quantityButton: {
-    width: 60,
-    height: 60,
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.lightBackground,
+    width: 50,
+    height: 50,
     borderRadius: borderRadius.md,
-    justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.small,
+    justifyContent: 'center',
   },
   quantityButtonText: {
     fontSize: 24,
   },
   quantityInput: {
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    backgroundColor: colors.lightBackground,
+    width: 80,
+    height: 50,
     borderRadius: borderRadius.md,
-    fontSize: 32,
+    textAlign: 'center',
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.textPrimary,
-    textAlign: 'center',
-    minWidth: 80,
   },
-  quickDateButtons: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  quickDateButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.sm,
-    alignItems: 'center',
-    ...shadows.small,
-  },
-  quickDateText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  datePickerButton: {
-    backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  datePickerText: {
+  selectedDate: {
     fontSize: 16,
     color: colors.textPrimary,
-  },
-  datePickerIcon: {
-    fontSize: 20,
-  },
-  clearDateButton: {
-    marginTop: spacing.xs,
-    alignSelf: 'center',
-  },
-  clearDateText: {
-    fontSize: 14,
-    color: colors.error,
+    marginBottom: spacing.md,
+    textAlign: 'center',
     fontWeight: '600',
   },
-  addButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+  quickDateContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  quickDateButton: {
+    backgroundColor: colors.lightBackground,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    flex: 1,
+    marginHorizontal: 4,
     alignItems: 'center',
-    marginTop: spacing.md,
-    ...shadows.medium,
   },
-  addButtonDisabled: {
-    opacity: 0.5,
+  quickDateText: {
+    color: colors.textDark,
+    fontWeight: '600',
+    fontSize: 14,
   },
-  addButtonText: {
-    fontSize: 20,
+  dateButton: {
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  dateButtonText: {
+    color: colors.primary,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+  },
+  clearDateButton: {
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  clearDateText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  saveButtonGradient: {
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+    ...shadows.large,
+  },
+  saveButton: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Clipboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -51,6 +52,14 @@ export default function SettingsScreen({ navigation }) {
   const [warningThreshold, setWarningThreshold] = useState(7);
   const [haEnabled, setHaEnabled] = useState(false);
 
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState([]);
+  const [showNewKeyForm, setShowNewKeyForm] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyDescription, setNewKeyDescription] = useState('');
+  const [generatedKey, setGeneratedKey] = useState(null);
+  const [authEnabled, setAuthEnabled] = useState(false);
+
   useEffect(() => {
     loadSettings();
   }, []);
@@ -84,9 +93,112 @@ export default function SettingsScreen({ navigation }) {
       if (notifEnabled === 'true' && !hasPermission) {
         setNotificationsEnabled(false);
       }
+
+      // Load API keys and check auth status
+      checkAuthStatus(url);
+      loadApiKeys(url);
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
+  };
+
+  const checkAuthStatus = async (url) => {
+    try {
+      const response = await fetch(`${url}/api/items`);
+      setAuthEnabled(response.status === 401);
+    } catch (error) {
+      console.log('Could not check auth status');
+    }
+  };
+
+  const loadApiKeys = async (url) => {
+    try {
+      const response = await fetch(`${url}/api/auth/keys`);
+      if (response.ok) {
+        const data = await response.json();
+        setApiKeys(data.keys || []);
+      }
+    } catch (error) {
+      console.log('Error loading API keys:', error);
+    }
+  };
+
+  const generateApiKey = async () => {
+    if (!newKeyName.trim()) {
+      Alert.alert('Error', 'Please enter a name for the API key');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/auth/keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newKeyName,
+          description: newKeyDescription || null,
+          expires_in_days: null
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGeneratedKey(data.api_key);
+        setNewKeyName('');
+        setNewKeyDescription('');
+        setShowNewKeyForm(false);
+        await loadApiKeys(apiUrl);
+        
+        Alert.alert(
+          '⚠️ API Key Generated',
+          'Your API key has been generated. Copy it now - it won\'t be shown again!',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Copy Now', onPress: () => copyToClipboard(data.api_key) }
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to generate API key');
+      }
+    } catch (error) {
+      Alert.alert('Error', `Failed to generate API key: ${error.message}`);
+    }
+  };
+
+  const deleteApiKey = async (keyId, keyName) => {
+    Alert.alert(
+      'Delete API Key',
+      `Are you sure you want to delete "${keyName}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(`${apiUrl}/api/auth/keys/${keyId}`, {
+                method: 'DELETE'
+              });
+              if (response.ok) {
+                await loadApiKeys(apiUrl);
+                Alert.alert('Success', 'API key deleted');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete API key');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const copyToClipboard = (text) => {
+    Clipboard.setString(text);
+    Alert.alert('Copied!', 'API key copied to clipboard');
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Never';
+    return new Date(dateString).toLocaleDateString();
   };
 
   const testConnection = async () => {
@@ -418,6 +530,7 @@ export default function SettingsScreen({ navigation }) {
 
   const menuItems = [
     { id: 'connection', icon: '🌐', title: 'Connection', description: 'Configure server URL', color: colors.scanButton },
+    { id: 'apikeys', icon: '🔑', title: 'API Keys', description: 'Manage authentication', color: '#8B5CF6' },
     { id: 'importexport', icon: '📥', title: 'Import/Export', description: 'Manage CSV files', color: colors.accent },
     { id: 'notifications', icon: '🔔', title: 'Notifications', description: 'Expiry alerts', color: '#FFB74D' },
     { id: 'homeassistant', icon: '🏠', title: 'Home Assistant', description: 'Smart home integration', color: '#4FC3F7' },
@@ -469,6 +582,7 @@ export default function SettingsScreen({ navigation }) {
           </TouchableOpacity>
           <Text style={styles.title}>
             {currentView === 'connection' && '🌐 Connection'}
+            {currentView === 'apikeys' && '🔑 API Keys'}
             {currentView === 'importexport' && '📥 Import/Export'}
             {currentView === 'notifications' && '🔔 Notifications'}
             {currentView === 'homeassistant' && '🏠 Home Assistant'}
@@ -507,6 +621,163 @@ export default function SettingsScreen({ navigation }) {
             <TouchableOpacity style={styles.saveButton} onPress={saveConnectionSettings}>
               <Text style={styles.saveButtonText}>💾 Save Connection</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {currentView === 'apikeys' && (
+          <View>
+            {/* Auth Status Card */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>🔐 Authentication Status</Text>
+              <View style={styles.statusRow}>
+                <View style={styles.statusInfo}>
+                  <Text style={styles.statusLabel}>
+                    {authEnabled ? 'API keys required' : 'Open access (no auth)'}
+                  </Text>
+                  <Text style={styles.hint}>
+                    {authEnabled ? 'Authentication is enabled on your server' : 'No authentication required'}
+                  </Text>
+                </View>
+                <View style={[styles.badge, authEnabled ? styles.badgeActive : styles.badgeInactive]}>
+                  <Text style={[styles.badgeText, authEnabled ? styles.badgeTextActive : styles.badgeTextInactive]}>
+                    {authEnabled ? '🔒 On' : '🔓 Off'}
+                  </Text>
+                </View>
+              </View>
+              
+              {!authEnabled && (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>
+                    💡 Authentication is disabled. To enable it, set REQUIRE_AUTH=true in docker-compose.yml
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Generated Key Display */}
+            {generatedKey && (
+              <View style={styles.keyDisplayCard}>
+                <Text style={styles.warningTitle}>⚠️ Save This Key Now!</Text>
+                <Text style={styles.warningText}>
+                  This is the only time you'll see this key. Copy it and store it securely.
+                </Text>
+                <View style={styles.keyContainer}>
+                  <Text style={styles.keyText}>{generatedKey}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.copyButton}
+                  onPress={() => copyToClipboard(generatedKey)}
+                >
+                  <Text style={styles.copyButtonText}>📋 Copy to Clipboard</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.dismissButton}
+                  onPress={() => setGeneratedKey(null)}
+                >
+                  <Text style={styles.dismissButtonText}>I've Saved It</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* API Keys Management */}
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.sectionTitle}>Your API Keys</Text>
+                <TouchableOpacity
+                  style={styles.newKeyButton}
+                  onPress={() => setShowNewKeyForm(!showNewKeyForm)}
+                >
+                  <Text style={styles.newKeyButtonText}>
+                    {showNewKeyForm ? '✕ Cancel' : '+ New Key'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* New Key Form */}
+              {showNewKeyForm && (
+                <View style={styles.form}>
+                  <Text style={styles.formTitle}>Create New API Key</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Name (e.g., Home Assistant)"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newKeyName}
+                    onChangeText={setNewKeyName}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Description (optional)"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newKeyDescription}
+                    onChangeText={setNewKeyDescription}
+                  />
+                  <TouchableOpacity
+                    style={styles.generateButton}
+                    onPress={generateApiKey}
+                  >
+                    <Text style={styles.generateButtonText}>🔑 Generate Key</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Keys List */}
+              {apiKeys.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No API keys yet</Text>
+                  <Text style={styles.emptyText}>Create your first key to get started</Text>
+                </View>
+              ) : (
+                <View style={styles.keysList}>
+                  {apiKeys.map((key) => (
+                    <View key={key.id} style={styles.keyItem}>
+                      <View style={styles.keyItemHeader}>
+                        <View style={styles.keyItemInfo}>
+                          <Text style={styles.keyName}>{key.name}</Text>
+                          {key.description && (
+                            <Text style={styles.keyDescription}>{key.description}</Text>
+                          )}
+                        </View>
+                        <View style={[styles.badge, key.is_active ? styles.badgeActive : styles.badgeInactive]}>
+                          <Text style={[styles.badgeText, key.is_active ? styles.badgeTextActive : styles.badgeTextInactive]}>
+                            {key.is_active ? 'Active' : 'Revoked'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.keyDates}>
+                        <Text style={styles.keyDate}>Created: {formatDate(key.created_at)}</Text>
+                        <Text style={styles.keyDate}>Last used: {formatDate(key.last_used_at)}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => deleteApiKey(key.id, key.name)}>
+                        <Text style={styles.deleteText}>🗑️ Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Usage Instructions */}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>📖 How to Use API Keys</Text>
+              <Text style={styles.description}>
+                <Text style={{ fontWeight: 'bold' }}>For Home Assistant:</Text> Add the X-API-Key header:
+              </Text>
+              <View style={styles.codeBlock}>
+                <Text style={styles.codeText}>
+{`headers:
+  X-API-Key: "pp_your_key_here"`}
+                </Text>
+              </View>
+              <Text style={styles.description}>
+                <Text style={{ fontWeight: 'bold' }}>For API requests:</Text> Include the header:
+              </Text>
+              <View style={styles.codeBlock}>
+                <Text style={styles.codeText}>
+{`curl http://your-ip/api/items \\
+  -H "X-API-Key: pp_your_key_here"`}
+                </Text>
+              </View>
+            </View>
           </View>
         )}
 
@@ -612,6 +883,7 @@ export default function SettingsScreen({ navigation }) {
   - platform: rest
     name: Pantry Expiring Items
     resource: ${originalUrl}/api/stats/expiring?days=7
+    ${authEnabled ? 'headers:\n      X-API-Key: "pp_your_key_here"' : ''}
     value_template: "{{ value_json.summary.total_expiring }}"
     json_attributes:
       - summary
@@ -622,6 +894,13 @@ export default function SettingsScreen({ navigation }) {
               <Text style={styles.description}>
                 This creates a sensor showing how many items are expiring soon. Restart Home Assistant after adding.
               </Text>
+              {authEnabled && (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoText}>
+                    🔑 Authentication is enabled. Don't forget to add your API key to the headers!
+                  </Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => {
@@ -840,7 +1119,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 20, fontWeight: 'bold', color: colors.textPrimary, marginBottom: spacing.sm },
   description: { fontSize: 15, color: colors.textSecondary, marginBottom: spacing.md, lineHeight: 22 },
   label: { fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.sm, marginTop: spacing.md },
-  input: { backgroundColor: colors.background, padding: spacing.md, borderRadius: borderRadius.md, fontSize: 16, color: colors.textPrimary },
+  input: { backgroundColor: colors.background, padding: spacing.md, borderRadius: borderRadius.md, fontSize: 16, color: colors.textPrimary, marginBottom: spacing.sm },
   hint: { fontSize: 13, color: colors.textSecondary, marginTop: spacing.sm, marginBottom: spacing.md, lineHeight: 20 },
   buttonRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
   button: { flex: 1, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', ...shadows.small },
@@ -896,4 +1175,215 @@ const styles = StyleSheet.create({
   codeBlock: { backgroundColor: colors.background, padding: spacing.md, borderRadius: borderRadius.md, borderLeftWidth: 4, borderLeftColor: colors.primary, marginVertical: spacing.md },
   codeText: { fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 12, color: colors.textPrimary, lineHeight: 18 },
   secondaryButton: { backgroundColor: colors.secondary, padding: spacing.md, borderRadius: borderRadius.md, alignItems: 'center', marginTop: spacing.md, ...shadows.small },
+  
+  // API Keys styles
+  statusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+  },
+  statusInfo: {
+    flex: 1,
+  },
+  statusLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  badge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+  },
+  badgeActive: {
+    backgroundColor: '#D1FAE5',
+  },
+  badgeInactive: {
+    backgroundColor: '#E5E7EB',
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  badgeTextActive: {
+    color: '#065F46',
+  },
+  badgeTextInactive: {
+    color: '#6B7280',
+  },
+  infoBox: {
+    padding: spacing.md,
+    backgroundColor: '#DBEAFE',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    marginTop: spacing.sm,
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#1E40AF',
+    lineHeight: 20,
+  },
+  keyDisplayCard: {
+    backgroundColor: '#FEF3C7',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: '#FCD34D',
+  },
+  warningTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: spacing.sm,
+    color: colors.textPrimary,
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#78350F',
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  keyContainer: {
+    backgroundColor: colors.card,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  keyText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 11,
+    color: colors.textPrimary,
+  },
+  copyButton: {
+    marginTop: spacing.md,
+    backgroundColor: '#F59E0B',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  copyButtonText: {
+    color: colors.card,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  dismissButton: {
+    marginTop: spacing.sm,
+    backgroundColor: '#E5E7EB',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  dismissButtonText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  newKeyButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  newKeyButtonText: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  form: {
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: spacing.md,
+  },
+  generateButton: {
+    backgroundColor: '#10B981',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  generateButtonText: {
+    color: colors.card,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  keysList: {
+    marginTop: spacing.sm,
+  },
+  keyItem: {
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  keyItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  keyItemInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  keyName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  keyDescription: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  keyDates: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  keyDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  deleteText: {
+    fontSize: 14,
+    color: colors.error,
+    fontWeight: '600',
+  },
 });

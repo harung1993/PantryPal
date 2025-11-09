@@ -34,6 +34,10 @@ services:
     environment:
       - INVENTORY_SERVICE_URL=http://inventory-service:8001
       - LOOKUP_SERVICE_URL=http://lookup-service:8002
+      - AUTH_MODE=none  # Options: none, api_key_only, full
+      # none: No authentication (open access)
+      # api_key_only: API keys required for API, but no login for UI
+      # full: Login required for UI, API keys OR session for API
     volumes:
       - ./data:/app/data
     networks:

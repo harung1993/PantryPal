@@ -1,4 +1,4 @@
-  import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { getItems, deleteItem } from '../services/api';
 import { colors, spacing, borderRadius, shadows } from '../styles/colors';
 
@@ -103,64 +104,79 @@ export default function HomeScreen({ navigation }) {
     if (daysUntilExpiry < 0) return '⚠️ Expired!';
     if (daysUntilExpiry === 0) return '⚠️ Expires Today!';
     if (daysUntilExpiry === 1) return '⚠️ Expires Tomorrow!';
-    if (daysUntilExpiry <= 7) return `⚠️ ${daysUntilExpiry} days left`;
-    return `${daysUntilExpiry} days`;
+    if (daysUntilExpiry <= 3) return `⚠️ Expires in ${daysUntilExpiry} days`;
+    if (daysUntilExpiry <= 7) return `Expires in ${daysUntilExpiry} days`;
+    return null;
   };
 
-  const getExpiryColor = (status) => {
+  const getExpiryStyle = (status) => {
     switch (status) {
       case 'expired':
       case 'critical':
-        return colors.error;
+        return { borderColor: colors.error, borderWidth: 2 };
       case 'warning':
-        return colors.accent;
+        return { borderColor: colors.warning, borderWidth: 2 };
       default:
-        return colors.textSecondary;
+        return { borderColor: colors.border, borderWidth: 1 };
     }
+  };
+
+  const handleDelete = (id) => {
+    Alert.alert(
+      'Delete Item',
+      'Are you sure you want to delete this item?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteItem(id);
+              loadItems();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete item');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderItem = ({ item }) => {
     const expiryStatus = getExpiryStatus(item.expiry_date);
     const expiryText = getExpiryText(item.expiry_date);
-    
+    const expiryStyle = getExpiryStyle(expiryStatus);
+
     return (
       <TouchableOpacity
-        style={[
-          styles.itemCard,
-          expiryStatus === 'expired' && styles.itemCardExpired,
-          expiryStatus === 'critical' && styles.itemCardCritical,
-        ]}
+        style={[styles.itemCard, expiryStyle]}
         onPress={() => navigation.navigate('ItemDetail', { item })}
-        activeOpacity={0.7}
       >
         <View style={styles.itemHeader}>
-          <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.itemQuantity}>×{item.quantity}</Text>
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemName}>{item.name}</Text>
+            {item.brand && <Text style={styles.itemBrand}>{item.brand}</Text>}
+          </View>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{item.category}</Text>
+          </View>
         </View>
-        
-        {item.brand && <Text style={styles.itemBrand}>{item.brand}</Text>}
-        
-        {groupBy === 'category' && (
-          <Text style={styles.itemLocation}>📍 {item.location}</Text>
-        )}
-        {groupBy === 'location' && (
-          <Text style={styles.categoryBadge}>🏷️ {item.category}</Text>
-        )}
-        {groupBy === 'none' && (
-          <>
-            <Text style={styles.itemLocation}>📍 {item.location}</Text>
-            <Text style={styles.categoryBadge}>🏷️ {item.category}</Text>
-          </>
-        )}
-        
+
+        <View style={styles.itemDetails}>
+          <Text style={styles.detailText}>📍 {item.location}</Text>
+          <Text style={styles.detailText}>× {item.quantity}</Text>
+        </View>
+
         {expiryText && (
-          <Text style={[styles.expiryText, { color: getExpiryColor(expiryStatus) }]}>
+          <Text style={[
+            styles.expiryText,
+            expiryStatus === 'expired' || expiryStatus === 'critical' 
+              ? styles.expiryTextCritical 
+              : styles.expiryTextWarning
+          ]}>
             {expiryText}
           </Text>
-        )}
-        
-        {item.manually_added && (
-          <Text style={styles.manualBadge}>✏️ Manual Entry</Text>
         )}
       </TouchableOpacity>
     );
@@ -174,141 +190,132 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.title}>🥫 PantryPal</Text>
-            <Text style={styles.count}>{items.length} items</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* Header with Gradient */}
+      <LinearGradient
+        colors={[colors.primary, colors.secondary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <Text style={styles.headerTitle}>🥫 PantryPal</Text>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Text style={styles.settingsIcon}>⚙️</Text>
+        </TouchableOpacity>
+      </LinearGradient>
 
-      <View style={styles.content}>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="🔍 Search items..."
+          placeholder="Search items..."
           placeholderTextColor={colors.textSecondary}
           value={search}
           onChangeText={setSearch}
-          onSubmitEditing={loadItems}
         />
+      </View>
 
-        <View style={styles.groupByContainer}>
-          <Text style={styles.groupByLabel}>Group by:</Text>
-          <View style={styles.toggleButtons}>
-            <TouchableOpacity
-              style={[styles.toggleButton, groupBy === 'none' && styles.toggleButtonActive]}
-              onPress={() => setGroupBy('none')}
-            >
-              <Text style={[styles.toggleButtonText, groupBy === 'none' && styles.toggleButtonTextActive]}>
-                None
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.toggleButton, groupBy === 'location' && styles.toggleButtonActive]}
-              onPress={() => setGroupBy('location')}
-            >
-              <Text style={[styles.toggleButtonText, groupBy === 'location' && styles.toggleButtonTextActive]}>
-                📍 Location
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.toggleButton, groupBy === 'category' && styles.toggleButtonActive]}
-              onPress={() => setGroupBy('category')}
-            >
-              <Text style={[styles.toggleButtonText, groupBy === 'category' && styles.toggleButtonTextActive]}>
-                🏷️ Category
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+      {/* Group By Toggle */}
+      <View style={styles.groupByContainer}>
+        <TouchableOpacity
+          style={[styles.groupButton, groupBy === 'none' && styles.groupButtonActive]}
+          onPress={() => setGroupBy('none')}
+        >
+          <Text style={[styles.groupButtonText, groupBy === 'none' && styles.groupButtonTextActive]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.groupButton, groupBy === 'location' && styles.groupButtonActive]}
+          onPress={() => setGroupBy('location')}
+        >
+          <Text style={[styles.groupButtonText, groupBy === 'location' && styles.groupButtonTextActive]}>
+            📍 Location
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.groupButton, groupBy === 'category' && styles.groupButtonActive]}
+          onPress={() => setGroupBy('category')}
+        >
+          <Text style={[styles.groupButtonText, groupBy === 'category' && styles.groupButtonTextActive]}>
+            🏷️ Category
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-        <View style={styles.buttonRow}>
+      {/* Items List */}
+      {groupBy === 'none' ? (
+        <FlatList
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadItems();
+              }}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>
+              {loading ? 'Loading...' : 'No items found'}
+            </Text>
+          }
+        />
+      ) : (
+        <SectionList
+          sections={groupedItems}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadItems();
+              }}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>
+              {loading ? 'Loading...' : 'No items found'}
+            </Text>
+          }
+        />
+      )}
+
+      {/* Gradient Scan Button - Floating */}
+      <View style={styles.scanButtonContainer}>
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.scanButtonGradient}
+        >
           <TouchableOpacity
-            style={[styles.button, styles.scanButton]}
+            style={styles.scanButton}
             onPress={() => navigation.navigate('Scanner')}
-            activeOpacity={0.8}
           >
-            <Text style={styles.buttonEmoji}>📷</Text>
-            <Text style={styles.buttonText}>Scan</Text>
+            <Text style={styles.scanButtonText}>📷 Scan Barcode</Text>
           </TouchableOpacity>
+        </LinearGradient>
 
-          <TouchableOpacity
-            style={[styles.button, styles.manualButton]}
-            onPress={() => navigation.navigate('ManualAdd')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.buttonEmoji}>✏️</Text>
-            <Text style={styles.buttonText}>Manual</Text>
-          </TouchableOpacity>
-        </View>
-
-        {groupBy === 'none' ? (
-          <FlatList
-            data={items}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={styles.list}
-            refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={() => {
-                  setRefreshing(true);
-                  loadItems();
-                }}
-                tintColor={colors.primary}
-              />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyEmoji}>🥫</Text>
-                <Text style={styles.emptyText}>
-                  {loading ? 'Loading...' : 'Your pantry is empty'}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  {loading ? '' : 'Tap "Scan" to add items'}
-                </Text>
-              </View>
-            }
-          />
-        ) : (
-          <SectionList
-            sections={groupedItems}
-            renderItem={renderItem}
-            renderSectionHeader={renderSectionHeader}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={styles.list}
-            refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={() => {
-                  setRefreshing(true);
-                  loadItems();
-                }}
-                tintColor={colors.primary}
-              />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyEmoji}>🥫</Text>
-                <Text style={styles.emptyText}>
-                  {loading ? 'Loading...' : 'Your pantry is empty'}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  {loading ? '' : 'Tap "Scan" to add items'}
-                </Text>
-              </View>
-            }
-          />
-        )}
+        {/* Manual Add Button */}
+        <TouchableOpacity
+          style={styles.manualAddButton}
+          onPress={() => navigation.navigate('ManualAdd')}
+        >
+          <Text style={styles.manualAddText}>➕ Add Manually</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -320,199 +327,178 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: colors.primary,
-    padding: spacing.lg,
-    paddingTop: 60,
-    borderBottomLeftRadius: borderRadius.lg,
-    borderBottomRightRadius: borderRadius.lg,
-  },
-  headerTop: {
+    paddingTop: 50,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
   settingsButton: {
     padding: spacing.sm,
   },
   settingsIcon: {
-    fontSize: 28,
+    fontSize: 24,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-  },
-  count: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  content: {
-    flex: 1,
-    padding: spacing.md,
+  searchContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
   },
   searchInput: {
     backgroundColor: colors.card,
-    padding: spacing.md,
     borderRadius: borderRadius.md,
+    padding: spacing.md,
     fontSize: 16,
     color: colors.textPrimary,
-    marginBottom: spacing.md,
-    ...shadows.small,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   groupByContainer: {
-    marginBottom: spacing.md,
-  },
-  groupByLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  toggleButtons: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
-  toggleButton: {
+  groupButton: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    ...shadows.small,
-  },
-  toggleButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  toggleButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  toggleButtonTextActive: {
-    color: colors.textPrimary,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  button: {
-    flex: 1,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 100,
-    ...shadows.medium,
-  },
-  scanButton: {
-    backgroundColor: colors.scanButton,
-  },
-  manualButton: {
-    backgroundColor: colors.secondary,
-  },
-  buttonEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.xs,
-  },
-  buttonText: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  list: {
-    paddingBottom: spacing.lg,
-  },
-  sectionHeader: {
-    backgroundColor: colors.primary,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.md,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  groupButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  groupButtonText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  groupButtonTextActive: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  listContent: {
+    padding: spacing.lg,
+    paddingBottom: 200,
+  },
+  sectionHeader: {
+    backgroundColor: colors.lightBackground,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
     marginBottom: spacing.sm,
-    marginTop: spacing.md,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.textDark,
   },
   itemCard: {
     backgroundColor: colors.card,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
-    ...shadows.small,
-  },
-  itemCardExpired: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.error,
-  },
-  itemCardCritical: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.accent,
+    ...shadows.medium,
   },
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  itemInfo: {
+    flex: 1,
   },
   itemName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  itemQuantity: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: colors.primary,
+    color: colors.textPrimary,
+    marginBottom: 2,
   },
   itemBrand: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  itemLocation: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
   },
   categoryBadge: {
+    backgroundColor: colors.lightBackground,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: colors.textDark,
+    fontWeight: '600',
+  },
+  itemDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  detailText: {
     fontSize: 14,
-    color: colors.accent,
-    marginTop: spacing.xs,
+    color: colors.textSecondary,
   },
   expiryText: {
     fontSize: 14,
-    fontWeight: '600',
-    marginTop: spacing.xs,
+    fontWeight: 'bold',
+    marginTop: spacing.sm,
   },
-  manualBadge: {
-    fontSize: 13,
-    color: colors.secondary,
-    marginTop: spacing.xs,
+  expiryTextCritical: {
+    color: colors.error,
   },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.md,
+  expiryTextWarning: {
+    color: colors.warning,
   },
   emptyText: {
-    fontSize: 20,
+    textAlign: 'center',
     color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    fontWeight: '500',
-  },
-  emptySubtext: {
     fontSize: 16,
-    color: colors.textSecondary,
+    marginTop: spacing.xl,
+  },
+  scanButtonContainer: {
+    position: 'absolute',
+    bottom: spacing.xl,
+    left: spacing.lg,
+    right: spacing.lg,
+  },
+  scanButtonGradient: {
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    ...shadows.large,
+  },
+  scanButton: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+  },
+  scanButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  manualAddButton: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    ...shadows.medium,
+  },
+  manualAddText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

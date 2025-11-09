@@ -14,12 +14,10 @@ function SettingsPage({ onBack }) {
   const [newLocation, setNewLocation] = useState('');
   const [newCategory, setNewCategory] = useState('');
   
-  // CSV Export state
   const [exportFilter, setExportFilter] = useState('all');
   const [exportValue, setExportValue] = useState('');
   const [exporting, setExporting] = useState(false);
 
-  // CSV Import state
   const [importing, setImporting] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importPreview, setImportPreview] = useState(null);
@@ -28,6 +26,15 @@ function SettingsPage({ onBack }) {
     updateExisting: false,
   });
 
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState([]);
+  const [showNewKeyForm, setShowNewKeyForm] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyDescription, setNewKeyDescription] = useState('');
+  const [generatedKey, setGeneratedKey] = useState(null);
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [loadingKeys, setLoadingKeys] = useState(false);
+
   useEffect(() => {
     const stored = localStorage.getItem('API_BASE_URL') || 'http://localhost:8000';
     setApiUrl(stored);
@@ -35,7 +42,100 @@ function SettingsPage({ onBack }) {
     
     setLocations(getDefaultLocations());
     setCategories(getDefaultCategories());
+
+    // Load API keys and check auth status
+    checkAuthStatus(stored);
+    loadApiKeys(stored);
   }, []);
+
+  const checkAuthStatus = async (url) => {
+    try {
+      const response = await fetch(`${url}/api/items`);
+      setAuthEnabled(response.status === 401);
+    } catch (error) {
+      console.log('Could not check auth status');
+    }
+  };
+
+  const loadApiKeys = async (url) => {
+    try {
+      setLoadingKeys(true);
+      const response = await fetch(`${url}/api/auth/keys`);
+      if (response.ok) {
+        const data = await response.json();
+        setApiKeys(data.keys || []);
+      }
+    } catch (error) {
+      console.log('Error loading API keys:', error);
+    } finally {
+      setLoadingKeys(false);
+    }
+  };
+
+  const generateApiKey = async () => {
+    if (!newKeyName.trim()) {
+      alert('Please enter a name for the API key');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/auth/keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newKeyName,
+          description: newKeyDescription || null,
+          expires_in_days: null
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGeneratedKey(data.api_key);
+        setNewKeyName('');
+        setNewKeyDescription('');
+        setShowNewKeyForm(false);
+        await loadApiKeys(apiUrl);
+        
+        alert('⚠️ API Key Generated!\n\nYour API key has been generated. Copy it now - it won\'t be shown again!');
+      } else {
+        alert('Failed to generate API key');
+      }
+    } catch (error) {
+      alert(`Failed to generate API key: ${error.message}`);
+    }
+  };
+
+  const deleteApiKey = async (keyId, keyName) => {
+    if (!window.confirm(`Are you sure you want to delete "${keyName}"? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/api/auth/keys/${keyId}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        await loadApiKeys(apiUrl);
+        alert('API key deleted successfully');
+      }
+    } catch (error) {
+      alert('Failed to delete API key');
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('✅ Copied to clipboard!');
+    }).catch(() => {
+      alert('Failed to copy to clipboard');
+    });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Never';
+    return new Date(dateString).toLocaleDateString();
+  };
 
   const testConnection = async () => {
     setTesting(true);
@@ -190,7 +290,6 @@ function SettingsPage({ onBack }) {
 
       const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
       const rows = lines.slice(1, 6).map(line => {
-        // Simple CSV parser (handles quoted fields)
         const values = [];
         let current = '';
         let inQuotes = false;
@@ -233,7 +332,6 @@ function SettingsPage({ onBack }) {
         let skipCount = 0;
         let errorCount = 0;
 
-        // Get existing items to check for duplicates
         const existingItems = await getItems();
         const existingBarcodes = new Set(existingItems.map(item => item.barcode).filter(Boolean));
 
@@ -260,13 +358,11 @@ function SettingsPage({ onBack }) {
               item[header.toLowerCase().replace(/ /g, '_')] = values[index] || '';
             });
 
-            // Skip if barcode exists and skipDuplicates is enabled
             if (importOptions.skipDuplicates && item.barcode && existingBarcodes.has(item.barcode)) {
               skipCount++;
               continue;
             }
 
-            // Prepare item data
             const itemData = {
               name: item.name || 'Unknown Item',
               brand: item.brand || null,
@@ -306,176 +402,526 @@ function SettingsPage({ onBack }) {
   };
 
   const tabs = [
-    { id: 'connection', label: '🌐 Connection', icon: '🌐' },
-    { id: 'importexport', label: '📥 Import/Export', icon: '📥' },
-    { id: 'preferences', label: '⚙️ Preferences', icon: '⚙️' },
-    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️' },
+    { id: 'connection', label: '🌐 Connection' },
+    { id: 'apikeys', label: '🔑 API Keys' },
+    { id: 'importexport', label: '📥 Import/Export' },
+    { id: 'preferences', label: '⚙️ Preferences' },
+    { id: 'about', label: 'ℹ️ About' },
   ];
 
   return (
     <div style={{
       minHeight: '100vh',
       backgroundColor: colors.background,
-      padding: spacing.lg,
     }}>
-      <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: spacing.lg }}>
-          <button
-            onClick={onBack}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '18px',
-              color: colors.textPrimary,
-              cursor: 'pointer',
-              marginBottom: spacing.sm,
-              fontWeight: '600',
-            }}
-          >
-            ← Back
-          </button>
-          <h1 style={{ margin: 0, color: colors.textPrimary }}>⚙️ Settings</h1>
-        </div>
-
-        {/* Tabs */}
-        <div style={{
-          display: 'flex',
-          gap: spacing.xs,
-          marginBottom: spacing.lg,
-          borderBottom: `2px solid ${colors.border}`,
-          overflowX: 'auto',
-        }}>
-          {tabs.map(tab => (
+      {/* Sticky Header + Tabs */}
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        backgroundColor: colors.background,
+        zIndex: 100,
+        paddingTop: spacing.lg,
+        paddingBottom: spacing.sm,
+        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+        marginBottom: spacing.lg,
+      }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', paddingLeft: spacing.lg, paddingRight: spacing.lg }}>
+          <div style={{ marginBottom: spacing.md }}>
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={onBack}
               style={{
-                padding: `${spacing.md} ${spacing.lg}`,
+                background: 'none',
                 border: 'none',
-                background: activeTab === tab.id ? colors.primary : 'transparent',
+                fontSize: '18px',
                 color: colors.textPrimary,
-                fontWeight: activeTab === tab.id ? 'bold' : '500',
-                fontSize: '16px',
                 cursor: 'pointer',
-                borderBottom: activeTab === tab.id ? `3px solid ${colors.primary}` : '3px solid transparent',
-                transition: 'all 0.2s',
-                whiteSpace: 'nowrap',
+                marginBottom: spacing.sm,
+                fontWeight: '600',
               }}
             >
-              {tab.label}
+              ← Back
             </button>
-          ))}
-        </div>
+            <h1 style={{ margin: 0, color: colors.textPrimary }}>⚙️ Settings</h1>
+          </div>
 
-        {/* Tab Content */}
+          <div style={{
+            display: 'flex',
+            gap: spacing.xs,
+            borderBottom: `2px solid ${colors.border}`,
+            overflowX: 'auto',
+          }}>
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  padding: `${spacing.md} ${spacing.lg}`,
+                  border: 'none',
+                  background: activeTab === tab.id ? colors.primary : 'transparent',
+                  color: colors.textPrimary,
+                  fontWeight: activeTab === tab.id ? 'bold' : '500',
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                  borderBottom: activeTab === tab.id ? `3px solid ${colors.primary}` : '3px solid transparent',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <div style={{ 
+        maxWidth: '900px', 
+        margin: '0 auto',
+        padding: spacing.lg,
+        paddingBottom: '200px',
+      }}>
         {activeTab === 'connection' && (
+          <div style={{
+            background: colors.card,
+            padding: spacing.xl,
+            borderRadius: borderRadius.lg,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+          }}>
+            <h2 style={{ marginTop: 0, color: colors.textPrimary }}>Server Connection</h2>
+            <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
+              Configure the backend API URL. The server must be running and accessible.
+            </p>
+
+            <div style={{ marginTop: spacing.lg }}>
+              <label style={{
+                display: 'block',
+                marginBottom: spacing.sm,
+                fontWeight: '600',
+                color: colors.textPrimary,
+                fontSize: '16px',
+              }}>
+                Server URL
+              </label>
+              <input
+                type="text"
+                value={apiUrl}
+                onChange={(e) => setApiUrl(e.target.value)}
+                placeholder="http://192.168.1.100:8000"
+                style={{
+                  width: '100%',
+                  padding: spacing.md,
+                  borderRadius: borderRadius.md,
+                  border: `2px solid ${colors.border}`,
+                  fontSize: '16px',
+                  marginBottom: spacing.sm,
+                  backgroundColor: '#ffffff',
+                  color: colors.textPrimary,
+                }}
+              />
+              <p style={{ 
+                fontSize: '14px', 
+                color: colors.textSecondary,
+                margin: `${spacing.sm} 0`,
+              }}>
+                Examples: http://192.168.68.119:8000, http://macmini.local:8000
+              </p>
+            </div>
+
+            <div style={{ 
+              display: 'flex', 
+              gap: spacing.md, 
+              marginTop: spacing.lg,
+              flexWrap: 'wrap',
+            }}>
+              <button
+                onClick={testConnection}
+                disabled={testing}
+                style={{
+                  flex: 1,
+                  minWidth: '150px',
+                  padding: spacing.md,
+                  borderRadius: borderRadius.md,
+                  border: 'none',
+                  background: colors.scanButton,
+                  color: colors.textPrimary,
+                  fontWeight: 'bold',
+                  cursor: testing ? 'not-allowed' : 'pointer',
+                  opacity: testing ? 0.6 : 1,
+                }}
+              >
+                {testing ? '🔄 Testing...' : '🔍 Test Connection'}
+              </button>
+
+              <button
+                onClick={resetToDefault}
+                style={{
+                  flex: 1,
+                  minWidth: '150px',
+                  padding: spacing.md,
+                  borderRadius: borderRadius.md,
+                  border: 'none',
+                  background: colors.textSecondary,
+                  color: colors.card,
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                }}
+              >
+                ↺ Reset to Default
+              </button>
+            </div>
+
+            <button
+              onClick={saveConnectionSettings}
+              style={{
+                width: '100%',
+                padding: spacing.lg,
+                borderRadius: borderRadius.lg,
+                border: 'none',
+                background: colors.primary,
+                color: colors.textPrimary,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '18px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                marginTop: spacing.lg,
+              }}
+            >
+              💾 Save Connection Settings
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'apikeys' && (
           <div>
+            {/* Auth Status Card */}
+            <div style={{
+              background: colors.card,
+              padding: spacing.xl,
+              borderRadius: borderRadius.lg,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              marginBottom: spacing.lg,
+            }}>
+              <h2 style={{ marginTop: 0, color: colors.textPrimary }}>🔐 Authentication Status</h2>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: spacing.md,
+                backgroundColor: colors.background,
+                borderRadius: borderRadius.md,
+                marginBottom: spacing.sm,
+              }}>
+                <div>
+                  <div style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.xs }}>
+                    {authEnabled ? 'API keys required' : 'Open access (no auth)'}
+                  </div>
+                  <div style={{ fontSize: '14px', color: colors.textSecondary }}>
+                    {authEnabled ? 'Authentication is enabled on your server' : 'No authentication required'}
+                  </div>
+                </div>
+                <div style={{
+                  padding: `${spacing.sm} ${spacing.md}`,
+                  borderRadius: '999px',
+                  backgroundColor: authEnabled ? '#D1FAE5' : '#E5E7EB',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: authEnabled ? '#065F46' : '#6B7280',
+                }}>
+                  {authEnabled ? '🔒 On' : '🔓 Off'}
+                </div>
+              </div>
+              
+              {!authEnabled && (
+                <div style={{
+                  padding: spacing.md,
+                  backgroundColor: '#DBEAFE',
+                  borderRadius: borderRadius.md,
+                  border: '1px solid #93C5FD',
+                  marginTop: spacing.sm,
+                }}>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#1E40AF', lineHeight: 1.5 }}>
+                    💡 Authentication is disabled. To enable it, set REQUIRE_AUTH=true in docker-compose.yml
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Generated Key Display */}
+            {generatedKey && (
+              <div style={{
+                backgroundColor: '#FEF3C7',
+                padding: spacing.xl,
+                borderRadius: borderRadius.lg,
+                border: '2px solid #FCD34D',
+                marginBottom: spacing.lg,
+              }}>
+                <h3 style={{ marginTop: 0, fontSize: '18px', fontWeight: 'bold', color: colors.textPrimary }}>
+                  ⚠️ Save This Key Now!
+                </h3>
+                <p style={{ fontSize: '14px', color: '#78350F', lineHeight: 1.5, marginBottom: spacing.md }}>
+                  This is the only time you'll see this key. Copy it and store it securely.
+                </p>
+                <div style={{
+                  backgroundColor: colors.card,
+                  padding: spacing.md,
+                  borderRadius: borderRadius.md,
+                  border: '1px solid #FCD34D',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  wordBreak: 'break-all',
+                  marginBottom: spacing.md,
+                }}>
+                  {generatedKey}
+                </div>
+                <button
+                  onClick={() => copyToClipboard(generatedKey)}
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    borderRadius: borderRadius.md,
+                    border: 'none',
+                    backgroundColor: '#F59E0B',
+                    color: colors.card,
+                    fontWeight: '600',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  📋 Copy to Clipboard
+                </button>
+                <button
+                  onClick={() => setGeneratedKey(null)}
+                  style={{
+                    width: '100%',
+                    padding: spacing.md,
+                    borderRadius: borderRadius.md,
+                    border: 'none',
+                    backgroundColor: '#E5E7EB',
+                    color: '#374151',
+                    fontWeight: '600',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  I've Saved It
+                </button>
+              </div>
+            )}
+
+            {/* API Keys Management */}
+            <div style={{
+              background: colors.card,
+              padding: spacing.xl,
+              borderRadius: borderRadius.lg,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              marginBottom: spacing.lg,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <h2 style={{ margin: 0, color: colors.textPrimary }}>Your API Keys</h2>
+                <button
+                  onClick={() => setShowNewKeyForm(!showNewKeyForm)}
+                  style={{
+                    padding: `${spacing.sm} ${spacing.md}`,
+                    borderRadius: borderRadius.md,
+                    border: 'none',
+                    backgroundColor: colors.primary,
+                    color: colors.textPrimary,
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {showNewKeyForm ? '✕ Cancel' : '+ New Key'}
+                </button>
+              </div>
+
+              {/* New Key Form */}
+              {showNewKeyForm && (
+                <div style={{
+                  backgroundColor: colors.background,
+                  padding: spacing.md,
+                  borderRadius: borderRadius.md,
+                  marginBottom: spacing.md,
+                }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.md, marginTop: 0 }}>
+                    Create New API Key
+                  </h3>
+                  <input
+                    type="text"
+                    placeholder="Name (e.g., Home Assistant)"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      fontSize: '16px',
+                      marginBottom: spacing.sm,
+                      backgroundColor: '#ffffff',
+                      color: colors.textPrimary,
+                    }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Description (optional)"
+                    value={newKeyDescription}
+                    onChange={(e) => setNewKeyDescription(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      fontSize: '16px',
+                      marginBottom: spacing.sm,
+                      backgroundColor: '#ffffff',
+                      color: colors.textPrimary,
+                    }}
+                  />
+                  <button
+                    onClick={generateApiKey}
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: 'none',
+                      backgroundColor: '#10B981',
+                      color: colors.card,
+                      fontWeight: '600',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🔑 Generate Key
+                  </button>
+                </div>
+              )}
+
+              {/* Keys List */}
+              {loadingKeys ? (
+                <div style={{ textAlign: 'center', padding: spacing.xl, color: colors.textSecondary }}>
+                  Loading...
+                </div>
+              ) : apiKeys.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: spacing.xl }}>
+                  <div style={{ fontSize: '18px', fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.xs }}>
+                    No API keys yet
+                  </div>
+                  <div style={{ fontSize: '14px', color: colors.textSecondary }}>
+                    Create your first key to get started
+                  </div>
+                </div>
+              ) : (
+                <div style={{ marginTop: spacing.sm }}>
+                  {apiKeys.map((key) => (
+                    <div key={key.id} style={{
+                      backgroundColor: colors.background,
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      marginBottom: spacing.sm,
+                      border: `1px solid ${colors.border}`,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '16px', fontWeight: 'bold', color: colors.textPrimary, marginBottom: spacing.xs }}>
+                            {key.name}
+                          </div>
+                          {key.description && (
+                            <div style={{ fontSize: '14px', color: colors.textSecondary }}>
+                              {key.description}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{
+                          padding: `${spacing.sm} ${spacing.md}`,
+                          borderRadius: '999px',
+                          backgroundColor: key.is_active ? '#D1FAE5' : '#E5E7EB',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: key.is_active ? '#065F46' : '#6B7280',
+                        }}>
+                          {key.is_active ? 'Active' : 'Revoked'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: spacing.sm }}>
+                        <div style={{ fontSize: '12px', color: colors.textSecondary }}>
+                          Created: {formatDate(key.created_at)}
+                        </div>
+                        <div style={{ fontSize: '12px', color: colors.textSecondary }}>
+                          Last used: {formatDate(key.last_used_at)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => deleteApiKey(key.id, key.name)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: colors.error,
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          padding: 0,
+                        }}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Usage Instructions */}
             <div style={{
               background: colors.card,
               padding: spacing.xl,
               borderRadius: borderRadius.lg,
               boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
             }}>
-              <h2 style={{ marginTop: 0, color: colors.textPrimary }}>Server Connection</h2>
+              <h2 style={{ marginTop: 0, color: colors.textPrimary }}>📖 How to Use API Keys</h2>
               <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
-                Configure the backend API URL. The server must be running and accessible.
+                <strong>For Home Assistant:</strong> Add the X-API-Key header:
               </p>
-
-              <div style={{ marginTop: spacing.lg }}>
-                <label style={{
-                  display: 'block',
-                  marginBottom: spacing.sm,
-                  fontWeight: '600',
-                  color: colors.textPrimary,
-                  fontSize: '16px',
-                }}>
-                  Server URL
-                </label>
-                <input
-                  type="text"
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
-                  placeholder="http://192.168.1.100:8000"
-                  style={{
-                    width: '100%',
-                    padding: spacing.md,
-                    borderRadius: borderRadius.md,
-                    border: `2px solid ${colors.border}`,
-                    fontSize: '16px',
-                    marginBottom: spacing.sm,
-                  }}
-                />
-                <p style={{ 
-                  fontSize: '14px', 
-                  color: colors.textSecondary,
-                  margin: `${spacing.sm} 0`,
-                }}>
-                  Examples: http://192.168.68.119:8000, http://macmini.local:8000
-                </p>
-              </div>
-
-              <div style={{ 
-                display: 'flex', 
-                gap: spacing.md, 
-                marginTop: spacing.lg,
-                flexWrap: 'wrap',
+              <div style={{
+                backgroundColor: colors.background,
+                padding: spacing.md,
+                borderRadius: borderRadius.md,
+                borderLeft: `4px solid ${colors.primary}`,
+                marginBottom: spacing.md,
               }}>
-                <button
-                  onClick={testConnection}
-                  disabled={testing}
-                  style={{
-                    flex: 1,
-                    minWidth: '150px',
-                    padding: spacing.md,
-                    borderRadius: borderRadius.md,
-                    border: 'none',
-                    background: colors.scanButton,
-                    color: colors.textPrimary,
-                    fontWeight: 'bold',
-                    cursor: testing ? 'not-allowed' : 'pointer',
-                    opacity: testing ? 0.6 : 1,
-                  }}
-                >
-                  {testing ? '🔄 Testing...' : '🔍 Test Connection'}
-                </button>
-
-                <button
-                  onClick={resetToDefault}
-                  style={{
-                    flex: 1,
-                    minWidth: '150px',
-                    padding: spacing.md,
-                    borderRadius: borderRadius.md,
-                    border: 'none',
-                    background: colors.textSecondary,
-                    color: colors.card,
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                  }}
-                >
-                  ↺ Reset to Default
-                </button>
-              </div>
-
-              <button
-                onClick={saveConnectionSettings}
-                style={{
-                  width: '100%',
-                  padding: spacing.lg,
-                  borderRadius: borderRadius.lg,
-                  border: 'none',
-                  background: colors.primary,
+                <pre style={{
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
                   color: colors.textPrimary,
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  marginTop: spacing.lg,
-                }}
-              >
-                💾 Save Connection Settings
-              </button>
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                }}>
+{`headers:
+  X-API-Key: "pp_your_key_here"`}
+                </pre>
+              </div>
+              <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
+                <strong>For API requests:</strong> Include the header:
+              </p>
+              <div style={{
+                backgroundColor: colors.background,
+                padding: spacing.md,
+                borderRadius: borderRadius.md,
+                borderLeft: `4px solid ${colors.primary}`,
+              }}>
+                <pre style={{
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  color: colors.textPrimary,
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                }}>
+{`curl http://your-ip/api/items \\
+  -H "X-API-Key: pp_your_key_here"`}
+                </pre>
+              </div>
             </div>
           </div>
         )}
@@ -492,7 +938,7 @@ function SettingsPage({ onBack }) {
             }}>
               <h2 style={{ marginTop: 0, color: colors.textPrimary }}>📤 Import from CSV</h2>
               <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
-                Import items in bulk from a CSV file. File must have headers: Name, Brand, Category, Location, Quantity, Expiry Date, Notes, Barcode.
+                Import items in bulk from a CSV file.
               </p>
 
               {!importPreview ? (
@@ -528,7 +974,6 @@ function SettingsPage({ onBack }) {
                       display: 'flex',
                       alignItems: 'center',
                       gap: spacing.sm,
-                      marginBottom: spacing.sm,
                       cursor: 'pointer',
                     }}>
                       <input
@@ -632,7 +1077,7 @@ function SettingsPage({ onBack }) {
             }}>
               <h2 style={{ marginTop: 0, color: colors.textPrimary }}>📥 Export to CSV</h2>
               <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
-                Export your pantry inventory to a CSV file for backup or analysis.
+                Export your pantry inventory to a CSV file.
               </p>
 
               <div style={{ marginTop: spacing.lg }}>
@@ -733,8 +1178,7 @@ function SettingsPage({ onBack }) {
         )}
 
         {activeTab === 'preferences' && (
-          <div>
-            {/* Default Locations */}
+          <div style={{ paddingBottom: '100px' }}>
             <div style={{
               background: colors.card,
               padding: spacing.xl,
@@ -744,7 +1188,7 @@ function SettingsPage({ onBack }) {
             }}>
               <h2 style={{ marginTop: 0, color: colors.textPrimary }}>📍 Default Locations</h2>
               <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
-                Manage your storage locations. These will appear in dropdowns when adding items.
+                Manage your storage locations.
               </p>
 
               {locations.map((location, index) => (
@@ -788,6 +1232,8 @@ function SettingsPage({ onBack }) {
                     borderRadius: borderRadius.md,
                     border: `2px solid ${colors.border}`,
                     fontSize: '16px',
+                    backgroundColor: '#ffffff',
+                    color: colors.textPrimary,
                   }}
                 />
                 <button
@@ -807,7 +1253,6 @@ function SettingsPage({ onBack }) {
               </div>
             </div>
 
-            {/* Default Categories */}
             <div style={{
               background: colors.card,
               padding: spacing.xl,
@@ -817,7 +1262,7 @@ function SettingsPage({ onBack }) {
             }}>
               <h2 style={{ marginTop: 0, color: colors.textPrimary }}>🏷️ Default Categories</h2>
               <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
-                Manage product categories for better organization and filtering.
+                Manage product categories.
               </p>
 
               {categories.map((category, index) => (
@@ -861,6 +1306,8 @@ function SettingsPage({ onBack }) {
                     borderRadius: borderRadius.md,
                     border: `2px solid ${colors.border}`,
                     fontSize: '16px',
+                    backgroundColor: '#ffffff',
+                    color: colors.textPrimary,
                   }}
                 />
                 <button
@@ -893,6 +1340,7 @@ function SettingsPage({ onBack }) {
                 cursor: 'pointer',
                 fontSize: '18px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                marginBottom: '50px',
               }}
             >
               💾 Save Preferences
@@ -916,7 +1364,7 @@ function SettingsPage({ onBack }) {
                 borderBottom: `1px solid ${colors.border}`,
               }}>
                 <span style={{ color: colors.textSecondary }}>App Version</span>
-                <span style={{ color: colors.textPrimary, fontWeight: '600' }}>1.1.0</span>
+                <span style={{ color: colors.textPrimary, fontWeight: '600' }}>1.2.0</span>
               </div>
               <div style={{
                 display: 'flex',

@@ -17,7 +17,8 @@
       "bundleIdentifier": "com.pantrypal.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Allow PantryPal to access your camera to scan barcodes.",
-        "NSUserNotificationsUsageDescription": "Allow PantryPal to send you notifications about expiring items."
+        "NSUserNotificationsUsageDescription": "Allow PantryPal to send you notifications about expiring items.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -32,7 +33,9 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "NOTIFICATIONS",
-        "SCHEDULE_EXACT_ALARM"
+        "SCHEDULE_EXACT_ALARM",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -45,6 +48,11 @@
           "cameraPermission": "Allow PantryPal to access your camera to scan barcodes."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b2ace730-1f21-4da3-a5c2-97f8b867d7f8"
+      }
+    }
   }
 }
