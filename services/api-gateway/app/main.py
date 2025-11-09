@@ -345,7 +345,7 @@ async def delete_user(user_id: int, auth = Depends(require_admin)):
 # ============================================================================
 
 @app.get("/api/lookup/{barcode}")
-async def lookup_barcode(barcode: str, auth = Depends(get_current_auth)):
+async def lookup_barcode(barcode: str, request: Request, auth = Depends(get_current_auth)):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{LOOKUP_SERVICE_URL}/lookup/{barcode}", timeout=10.0)
