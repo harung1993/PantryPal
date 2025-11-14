@@ -1,33 +1,41 @@
 import React, { useState, useEffect } from 'react';
+import { User, Mail, Lock, Users, Shield, Activity } from 'lucide-react';
 import { colors, spacing, borderRadius } from './colors';
 import { getDefaultLocations, getDefaultCategories, saveDefaultLocations, saveDefaultCategories, DEFAULT_LOCATIONS, DEFAULT_CATEGORIES } from './defaults';
 import { getItems, addItemManual } from './api';
 
-function SettingsPage({ onBack }) {
+function SettingsPage({ onBack, currentUser }) {
   const [activeTab, setActiveTab] = useState('connection');
+  
+  // Connection settings
   const [apiUrl, setApiUrl] = useState('');
   const [savedUrl, setSavedUrl] = useState('');
   const [testing, setTesting] = useState(false);
   const [currentApiKey, setCurrentApiKey] = useState('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   
-  const [locations, setLocations] = useState(DEFAULT_LOCATIONS);
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [newLocation, setNewLocation] = useState('');
-  const [newCategory, setNewCategory] = useState('');
-  
-  const [exportFilter, setExportFilter] = useState('all');
-  const [exportValue, setExportValue] = useState('');
-  const [exporting, setExporting] = useState(false);
-
-  const [importing, setImporting] = useState(false);
-  const [importFile, setImportFile] = useState(null);
-  const [importPreview, setImportPreview] = useState(null);
-  const [importOptions, setImportOptions] = useState({
-    skipDuplicates: true,
-    updateExisting: false,
+  // Profile state
+  const [profile, setProfile] = useState({
+    email: '',
+    full_name: ''
   });
-
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+  
+  // Password state
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
+  
+  // Admin state
+  const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [adminLoading, setAdminLoading] = useState(false);
+  
   // API Keys state
   const [apiKeys, setApiKeys] = useState([]);
   const [showNewKeyForm, setShowNewKeyForm] = useState(false);
@@ -36,13 +44,32 @@ function SettingsPage({ onBack }) {
   const [generatedKey, setGeneratedKey] = useState(null);
   const [authEnabled, setAuthEnabled] = useState(false);
   const [loadingKeys, setLoadingKeys] = useState(false);
+  
+  // Preferences
+  const [locations, setLocations] = useState(DEFAULT_LOCATIONS);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [newLocation, setNewLocation] = useState('');
+  const [newCategory, setNewCategory] = useState('');
+  
+  // Import/Export
+  const [exportFilter, setExportFilter] = useState('all');
+  const [exportValue, setExportValue] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importOptions, setImportOptions] = useState({
+    skipDuplicates: true,
+    updateExisting: false,
+  });
+
+  const isAdmin = currentUser?.is_admin;
 
   useEffect(() => {
     const stored = localStorage.getItem('API_BASE_URL') || 'http://localhost';
     setApiUrl(stored);
     setSavedUrl(stored);
     
-    // Load API key
     const savedApiKey = localStorage.getItem('API_KEY');
     setCurrentApiKey(savedApiKey || '');
     setShowApiKeyInput(!!savedApiKey);
@@ -50,11 +77,187 @@ function SettingsPage({ onBack }) {
     setLocations(getDefaultLocations());
     setCategories(getDefaultCategories());
 
-    // Load API keys and check auth status
     checkAuthStatus(stored);
     loadApiKeys(stored);
-  }, []);
+    
+    if (currentUser) {
+      loadProfile();
+      if (isAdmin) {
+        loadUsers();
+        loadStats();
+      }
+    }
+  }, [currentUser, isAdmin]);
 
+  // Profile functions
+  const loadProfile = async () => {
+    try {
+      const response = await fetch('/api/users/me', {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setProfile({
+          email: data.email || '',
+          full_name: data.full_name || ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+    }
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setProfileLoading(true);
+    setProfileMessage('');
+
+    try {
+      const response = await fetch('/api/users/me', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify(profile)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setProfileMessage('✅ Profile updated successfully');
+        setTimeout(() => setProfileMessage(''), 3000);
+      } else {
+        setProfileMessage(`❌ ${data.detail || 'Failed to update profile'}`);
+      }
+    } catch (error) {
+      setProfileMessage('❌ Network error');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordMessage('');
+
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      setPasswordMessage('❌ New passwords do not match');
+      return;
+    }
+
+    if (passwordData.new_password.length < 8) {
+      setPasswordMessage('❌ Password must be at least 8 characters');
+      return;
+    }
+
+    setPasswordLoading(true);
+
+    try {
+      const response = await fetch('/api/users/me/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          current_password: passwordData.current_password,
+          new_password: passwordData.new_password
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPasswordMessage('✅ Password changed successfully');
+        setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+        setTimeout(() => setPasswordMessage(''), 3000);
+      } else {
+        setPasswordMessage(`❌ ${data.detail || 'Failed to change password'}`);
+      }
+    } catch (error) {
+      setPasswordMessage('❌ Network error');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  // Admin functions
+  const loadUsers = async () => {
+    setAdminLoading(true);
+    try {
+      const response = await fetch('/api/admin/users', {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users);
+      }
+    } catch (error) {
+      console.error('Failed to load users:', error);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const response = await fetch('/api/admin/stats', {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
+  };
+
+  const handleToggleUserStatus = async (userId, currentStatus) => {
+    try {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+
+      if (response.ok) {
+        loadUsers();
+        loadStats();
+      }
+    } catch (error) {
+      console.error('Failed to toggle user status:', error);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        loadUsers();
+        loadStats();
+      }
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+    }
+  };
+
+  // Connection & API Key functions
   const checkAuthStatus = async (url) => {
     try {
       const response = await fetch(`${url}/api/items`);
@@ -131,19 +334,6 @@ function SettingsPage({ onBack }) {
     }
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-      alert('✅ Copied to clipboard!');
-    }).catch(() => {
-      alert('Failed to copy to clipboard');
-    });
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleDateString();
-  };
-
   const testConnection = async () => {
     setTesting(true);
     try {
@@ -174,7 +364,6 @@ function SettingsPage({ onBack }) {
     localStorage.setItem('API_BASE_URL', cleanUrl);
     setSavedUrl(cleanUrl);
     
-    // Save API key if provided
     if (currentApiKey.trim()) {
       localStorage.setItem('API_KEY', currentApiKey.trim());
     } else {
@@ -184,12 +373,20 @@ function SettingsPage({ onBack }) {
     alert('✅ Connection settings saved!\n\nPlease refresh the page for changes to take effect.');
   };
 
-  const resetToDefault = () => {
-    if (window.confirm('Reset API URL to default (http://localhost)?')) {
-      setApiUrl('http://localhost');
-    }
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('✅ Copied to clipboard!');
+    }).catch(() => {
+      alert('Failed to copy to clipboard');
+    });
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Never';
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  // Preferences functions
   const addLocation = () => {
     if (newLocation.trim() && !locations.includes(newLocation.trim())) {
       setLocations([...locations, newLocation.trim()]);
@@ -218,6 +415,7 @@ function SettingsPage({ onBack }) {
     alert('✅ Preferences saved!');
   };
 
+  // Import/Export functions
   const exportToCSV = async () => {
     setExporting(true);
     try {
@@ -416,9 +614,12 @@ function SettingsPage({ onBack }) {
     setImportPreview(null);
   };
 
+  // Tabs configuration
   const tabs = [
     { id: 'connection', label: '🌐 Connection' },
     { id: 'apikeys', label: '🔑 API Keys' },
+    ...(currentUser ? [{ id: 'profile', label: '👤 Profile' }] : []),
+    ...(isAdmin ? [{ id: 'admin', label: '👥 Admin' }] : []),
     { id: 'importexport', label: '📥 Import/Export' },
     { id: 'preferences', label: '⚙️ Preferences' },
     { id: 'about', label: 'ℹ️ About' },
@@ -457,6 +658,11 @@ function SettingsPage({ onBack }) {
               ← Back
             </button>
             <h1 style={{ margin: 0, color: colors.textPrimary }}>⚙️ Settings</h1>
+            {currentUser && (
+              <p style={{ margin: `${spacing.xs} 0 0 0`, color: colors.textSecondary }}>
+                {currentUser.username} {isAdmin && <span style={{ color: '#f59e0b' }}>(Admin)</span>}
+              </p>
+            )}
           </div>
 
           <div style={{
@@ -496,6 +702,7 @@ function SettingsPage({ onBack }) {
         padding: spacing.lg,
         paddingBottom: '200px',
       }}>
+        {/* CONNECTION TAB */}
         {activeTab === 'connection' && (
           <div style={{
             background: colors.card,
@@ -615,29 +822,6 @@ function SettingsPage({ onBack }) {
                     💡 Required if server has AUTH_MODE=api_key_only or AUTH_MODE=full<br/>
                     Generate keys in Settings → API Keys tab
                   </p>
-                  {currentApiKey && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Remove saved API key?')) {
-                          localStorage.removeItem('API_KEY');
-                          setCurrentApiKey('');
-                          alert('API key removed');
-                        }
-                      }}
-                      style={{
-                        padding: spacing.md,
-                        borderRadius: borderRadius.md,
-                        border: 'none',
-                        background: colors.error,
-                        color: colors.card,
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        marginTop: spacing.sm,
-                      }}
-                    >
-                      🗑️ Clear API Key
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -668,7 +852,7 @@ function SettingsPage({ onBack }) {
               </button>
 
               <button
-                onClick={resetToDefault}
+                onClick={() => setApiUrl('http://localhost')}
                 style={{
                   flex: 1,
                   minWidth: '150px',
@@ -706,9 +890,9 @@ function SettingsPage({ onBack }) {
           </div>
         )}
 
+        {/* API KEYS TAB */}
         {activeTab === 'apikeys' && (
           <div>
-            {/* Auth Status Card */}
             <div style={{
               background: colors.card,
               padding: spacing.xl,
@@ -716,124 +900,74 @@ function SettingsPage({ onBack }) {
               boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
               marginBottom: spacing.lg,
             }}>
-              <h2 style={{ marginTop: 0, color: colors.textPrimary }}>🔐 Authentication Status</h2>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: spacing.md,
-                backgroundColor: colors.background,
-                borderRadius: borderRadius.md,
-                marginBottom: spacing.sm,
-              }}>
-                <div>
-                  <div style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.xs }}>
-                    {authEnabled ? 'API keys required' : 'Open access (no auth)'}
-                  </div>
-                  <div style={{ fontSize: '14px', color: colors.textSecondary }}>
-                    {authEnabled ? 'Authentication is enabled on your server' : 'No authentication required'}
-                  </div>
-                </div>
-                <div style={{
-                  padding: `${spacing.sm} ${spacing.md}`,
-                  borderRadius: '999px',
-                  backgroundColor: authEnabled ? '#D1FAE5' : '#E5E7EB',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: authEnabled ? '#065F46' : '#6B7280',
-                }}>
-                  {authEnabled ? '🔒 On' : '🔓 Off'}
-                </div>
-              </div>
+              <h2 style={{ marginTop: 0, color: colors.textPrimary }}>🔐 API Keys Management</h2>
+              <p style={{ color: colors.textSecondary }}>Manage API keys for accessing PantryPal</p>
               
-              {!authEnabled && (
+              {/* Generated Key Display */}
+              {generatedKey && (
                 <div style={{
-                  padding: spacing.md,
-                  backgroundColor: '#DBEAFE',
-                  borderRadius: borderRadius.md,
-                  border: '1px solid #93C5FD',
-                  marginTop: spacing.sm,
+                  backgroundColor: '#FEF3C7',
+                  padding: spacing.xl,
+                  borderRadius: borderRadius.lg,
+                  border: '2px solid #FCD34D',
+                  marginTop: spacing.lg,
                 }}>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#1E40AF', lineHeight: 1.5 }}>
-                    💡 Authentication is disabled. To enable it, set REQUIRE_AUTH=true in docker-compose.yml
+                  <h3 style={{ marginTop: 0, fontSize: '18px', fontWeight: 'bold', color: colors.textPrimary }}>
+                    ⚠️ Save This Key Now!
+                  </h3>
+                  <p style={{ fontSize: '14px', color: '#78350F', lineHeight: 1.5, marginBottom: spacing.md }}>
+                    This is the only time you'll see this key. Copy it and store it securely.
                   </p>
+                  <div style={{
+                    backgroundColor: colors.card,
+                    padding: spacing.md,
+                    borderRadius: borderRadius.md,
+                    border: '1px solid #FCD34D',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    wordBreak: 'break-all',
+                    marginBottom: spacing.md,
+                  }}>
+                    {generatedKey}
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(generatedKey)}
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: 'none',
+                      backgroundColor: '#F59E0B',
+                      color: colors.card,
+                      fontWeight: '600',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                      marginBottom: spacing.sm,
+                    }}
+                  >
+                    📋 Copy to Clipboard
+                  </button>
+                  <button
+                    onClick={() => setGeneratedKey(null)}
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: 'none',
+                      backgroundColor: '#E5E7EB',
+                      color: '#374151',
+                      fontWeight: '600',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    I've Saved It
+                  </button>
                 </div>
               )}
-            </div>
 
-            {/* Generated Key Display */}
-            {generatedKey && (
-              <div style={{
-                backgroundColor: '#FEF3C7',
-                padding: spacing.xl,
-                borderRadius: borderRadius.lg,
-                border: '2px solid #FCD34D',
-                marginBottom: spacing.lg,
-              }}>
-                <h3 style={{ marginTop: 0, fontSize: '18px', fontWeight: 'bold', color: colors.textPrimary }}>
-                  ⚠️ Save This Key Now!
-                </h3>
-                <p style={{ fontSize: '14px', color: '#78350F', lineHeight: 1.5, marginBottom: spacing.md }}>
-                  This is the only time you'll see this key. Copy it and store it securely.
-                </p>
-                <div style={{
-                  backgroundColor: colors.card,
-                  padding: spacing.md,
-                  borderRadius: borderRadius.md,
-                  border: '1px solid #FCD34D',
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  wordBreak: 'break-all',
-                  marginBottom: spacing.md,
-                }}>
-                  {generatedKey}
-                </div>
-                <button
-                  onClick={() => copyToClipboard(generatedKey)}
-                  style={{
-                    width: '100%',
-                    padding: spacing.md,
-                    borderRadius: borderRadius.md,
-                    border: 'none',
-                    backgroundColor: '#F59E0B',
-                    color: colors.card,
-                    fontWeight: '600',
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                    marginBottom: spacing.sm,
-                  }}
-                >
-                  📋 Copy to Clipboard
-                </button>
-                <button
-                  onClick={() => setGeneratedKey(null)}
-                  style={{
-                    width: '100%',
-                    padding: spacing.md,
-                    borderRadius: borderRadius.md,
-                    border: 'none',
-                    backgroundColor: '#E5E7EB',
-                    color: '#374151',
-                    fontWeight: '600',
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  I've Saved It
-                </button>
-              </div>
-            )}
-
-            {/* API Keys Management */}
-            <div style={{
-              background: colors.card,
-              padding: spacing.xl,
-              borderRadius: borderRadius.lg,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-              marginBottom: spacing.lg,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
-                <h2 style={{ margin: 0, color: colors.textPrimary }}>Your API Keys</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.lg }}>
+                <h3 style={{ margin: 0 }}>Your API Keys</h3>
                 <button
                   onClick={() => setShowNewKeyForm(!showNewKeyForm)}
                   style={{
@@ -851,13 +985,12 @@ function SettingsPage({ onBack }) {
                 </button>
               </div>
 
-              {/* New Key Form */}
               {showNewKeyForm && (
                 <div style={{
                   backgroundColor: colors.background,
                   padding: spacing.md,
                   borderRadius: borderRadius.md,
-                  marginBottom: spacing.md,
+                  marginTop: spacing.md,
                 }}>
                   <h3 style={{ fontSize: '16px', fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.md, marginTop: 0 }}>
                     Create New API Key
@@ -913,7 +1046,6 @@ function SettingsPage({ onBack }) {
                 </div>
               )}
 
-              {/* Keys List */}
               {loadingKeys ? (
                 <div style={{ textAlign: 'center', padding: spacing.xl, color: colors.textSecondary }}>
                   Loading...
@@ -986,60 +1118,457 @@ function SettingsPage({ onBack }) {
                 </div>
               )}
             </div>
+          </div>
+        )}
 
-            {/* Usage Instructions */}
+        {/* PROFILE TAB */}
+        {activeTab === 'profile' && currentUser && (
+          <div style={{ display: 'grid', gap: spacing.lg }}>
+            {/* Profile Information */}
             <div style={{
               background: colors.card,
               padding: spacing.xl,
               borderRadius: borderRadius.lg,
               boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
             }}>
-              <h2 style={{ marginTop: 0, color: colors.textPrimary }}>📖 How to Use API Keys</h2>
-              <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
-                <strong>For Home Assistant:</strong> Add the X-API-Key header:
-              </p>
-              <div style={{
-                backgroundColor: colors.background,
-                padding: spacing.md,
-                borderRadius: borderRadius.md,
-                borderLeft: `4px solid ${colors.primary}`,
-                marginBottom: spacing.md,
-              }}>
-                <pre style={{
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  color: colors.textPrimary,
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                }}>
-{`headers:
-  X-API-Key: "pp_your_key_here"`}
-                </pre>
-              </div>
-              <p style={{ color: colors.textSecondary, lineHeight: 1.6 }}>
-                <strong>For API requests:</strong> Include the header:
-              </p>
-              <div style={{
-                backgroundColor: colors.background,
-                padding: spacing.md,
-                borderRadius: borderRadius.md,
-                borderLeft: `4px solid ${colors.primary}`,
-              }}>
-                <pre style={{
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  color: colors.textPrimary,
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                }}>
-{`curl http://your-ip/api/items \\
-  -H "X-API-Key: pp_your_key_here"`}
-                </pre>
-              </div>
+              <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <User size={24} />
+                Profile Information
+              </h2>
+              
+              <form onSubmit={handleUpdateProfile} style={{ marginTop: spacing.lg }}>
+                <div style={{ marginBottom: spacing.md }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: spacing.sm,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}>
+                    Username (read-only)
+                  </label>
+                  <input
+                    type="text"
+                    value={currentUser?.username || ''}
+                    disabled
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      backgroundColor: '#f3f4f6',
+                      cursor: 'not-allowed',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: spacing.md }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: spacing.sm,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}>
+                    <Mail size={16} style={{ display: 'inline', marginRight: spacing.xs }} />
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={profile.email}
+                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                    placeholder="your.email@example.com"
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: spacing.md }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: spacing.sm,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}>
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={profile.full_name}
+                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+                    placeholder="John Doe"
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                </div>
+
+                {profileMessage && (
+                  <div style={{ marginBottom: spacing.md, fontSize: '14px' }}>
+                    {profileMessage}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={profileLoading}
+                  style={{
+                    width: '100%',
+                    padding: spacing.lg,
+                    borderRadius: borderRadius.lg,
+                    border: 'none',
+                    background: colors.primary,
+                    color: colors.textPrimary,
+                    fontWeight: 'bold',
+                    cursor: profileLoading ? 'not-allowed' : 'pointer',
+                    opacity: profileLoading ? 0.6 : 1,
+                  }}
+                >
+                  {profileLoading ? 'Updating...' : 'Save Changes'}
+                </button>
+              </form>
+            </div>
+
+            {/* Change Password */}
+            <div style={{
+              background: colors.card,
+              padding: spacing.xl,
+              borderRadius: borderRadius.lg,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            }}>
+              <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <Lock size={24} />
+                Change Password
+              </h2>
+              
+              <form onSubmit={handleChangePassword} style={{ marginTop: spacing.lg }}>
+                <div style={{ marginBottom: spacing.md }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: spacing.sm,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}>
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.current_password}
+                    onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
+                    placeholder="Enter current password"
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: spacing.md }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: spacing.sm,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}>
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.new_password}
+                    onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                    placeholder="Enter new password (min 8 chars)"
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: spacing.md }}>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: spacing.sm,
+                    fontWeight: '600',
+                    color: colors.textPrimary,
+                  }}>
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.confirm_password}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
+                    placeholder="Confirm new password"
+                    style={{
+                      width: '100%',
+                      padding: spacing.md,
+                      borderRadius: borderRadius.md,
+                      border: `2px solid ${colors.border}`,
+                      backgroundColor: '#ffffff',
+                    }}
+                  />
+                </div>
+
+                {passwordMessage && (
+                  <div style={{ marginBottom: spacing.md, fontSize: '14px' }}>
+                    {passwordMessage}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  style={{
+                    width: '100%',
+                    padding: spacing.lg,
+                    borderRadius: borderRadius.lg,
+                    border: 'none',
+                    background: colors.primary,
+                    color: colors.textPrimary,
+                    fontWeight: 'bold',
+                    cursor: passwordLoading ? 'not-allowed' : 'pointer',
+                    opacity: passwordLoading ? 0.6 : 1,
+                  }}
+                >
+                  {passwordLoading ? 'Changing Password...' : 'Change Password'}
+                </button>
+              </form>
             </div>
           </div>
         )}
 
+        {/* ADMIN TAB */}
+        {activeTab === 'admin' && isAdmin && (
+          <div>
+            {/* Statistics */}
+            {stats && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: spacing.md,
+                marginBottom: spacing.lg,
+              }}>
+                <div style={{
+                  background: colors.card,
+                  padding: spacing.xl,
+                  borderRadius: borderRadius.lg,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '14px', color: colors.textSecondary }}>Total Users</p>
+                      <p style={{ margin: '8px 0 0 0', fontSize: '32px', fontWeight: 'bold', color: colors.textPrimary }}>
+                        {stats.total_users}
+                      </p>
+                    </div>
+                    <Users size={48} color={colors.primary} />
+                  </div>
+                </div>
+
+                <div style={{
+                  background: colors.card,
+                  padding: spacing.xl,
+                  borderRadius: borderRadius.lg,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '14px', color: colors.textSecondary }}>Active Users</p>
+                      <p style={{ margin: '8px 0 0 0', fontSize: '32px', fontWeight: 'bold', color: '#10b981' }}>
+                        {stats.active_users}
+                      </p>
+                    </div>
+                    <Activity size={48} color="#10b981" />
+                  </div>
+                </div>
+
+                <div style={{
+                  background: colors.card,
+                  padding: spacing.xl,
+                  borderRadius: borderRadius.lg,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '14px', color: colors.textSecondary }}>Inactive Users</p>
+                      <p style={{ margin: '8px 0 0 0', fontSize: '32px', fontWeight: 'bold', color: '#ef4444' }}>
+                        {stats.inactive_users}
+                      </p>
+                    </div>
+                    <Activity size={48} color="#ef4444" />
+                  </div>
+                </div>
+
+                <div style={{
+                  background: colors.card,
+                  padding: spacing.xl,
+                  borderRadius: borderRadius.lg,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '14px', color: colors.textSecondary }}>Admins</p>
+                      <p style={{ margin: '8px 0 0 0', fontSize: '32px', fontWeight: 'bold', color: colors.primary }}>
+                        {stats.admin_users}
+                      </p>
+                    </div>
+                    <Shield size={48} color={colors.primary} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* User Management */}
+            <div style={{
+              background: colors.card,
+              padding: spacing.xl,
+              borderRadius: borderRadius.lg,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: spacing.lg,
+              }}>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                  <Users size={24} />
+                  User Management
+                </h2>
+              </div>
+
+              {adminLoading ? (
+                <div style={{ textAlign: 'center', padding: spacing.xl, color: colors.textSecondary }}>
+                  Loading users...
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${colors.border}` }}>
+                        <th style={{ textAlign: 'left', padding: spacing.md }}>Username</th>
+                        <th style={{ textAlign: 'left', padding: spacing.md }}>Email</th>
+                        <th style={{ textAlign: 'left', padding: spacing.md }}>Full Name</th>
+                        <th style={{ textAlign: 'left', padding: spacing.md }}>Role</th>
+                        <th style={{ textAlign: 'left', padding: spacing.md }}>Status</th>
+                        <th style={{ textAlign: 'left', padding: spacing.md }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => (
+                        <tr key={user.id} style={{ borderBottom: `1px solid ${colors.border}` }}>
+                          <td style={{ padding: spacing.md, fontWeight: '500' }}>{user.username}</td>
+                          <td style={{ padding: spacing.md, color: colors.textSecondary }}>{user.email || '-'}</td>
+                          <td style={{ padding: spacing.md, color: colors.textSecondary }}>{user.full_name || '-'}</td>
+                          <td style={{ padding: spacing.md }}>
+                            {user.is_admin ? (
+                              <span style={{
+                                padding: '4px 12px',
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                borderRadius: '9999px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                              }}>
+                                Admin
+                              </span>
+                            ) : (
+                              <span style={{
+                                padding: '4px 12px',
+                                background: '#f3f4f6',
+                                color: '#374151',
+                                borderRadius: '9999px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                              }}>
+                                User
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: spacing.md }}>
+                            {user.is_active ? (
+                              <span style={{
+                                padding: '4px 12px',
+                                background: '#d1fae5',
+                                color: '#065f46',
+                                borderRadius: '9999px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                              }}>
+                                Active
+                              </span>
+                            ) : (
+                              <span style={{
+                                padding: '4px 12px',
+                                background: '#fee2e2',
+                                color: '#991b1b',
+                                borderRadius: '9999px',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                              }}>
+                                Disabled
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: spacing.md }}>
+                            {user.id !== currentUser?.id && (
+                              <div style={{ display: 'flex', gap: spacing.sm }}>
+                                <button
+                                  onClick={() => handleToggleUserStatus(user.id, user.is_active)}
+                                  style={{
+                                    padding: '6px 12px',
+                                    background: '#3b82f6',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: borderRadius.sm,
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {user.is_active ? 'Disable' : 'Enable'}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  style={{
+                                    padding: '6px 12px',
+                                    background: '#ef4444',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: borderRadius.sm,
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* IMPORT/EXPORT TAB */}
         {activeTab === 'importexport' && (
           <div>
             {/* Import Section */}
@@ -1291,6 +1820,7 @@ function SettingsPage({ onBack }) {
           </div>
         )}
 
+        {/* PREFERENCES TAB */}
         {activeTab === 'preferences' && (
           <div style={{ paddingBottom: '100px' }}>
             <div style={{
@@ -1462,6 +1992,7 @@ function SettingsPage({ onBack }) {
           </div>
         )}
 
+        {/* ABOUT TAB */}
         {activeTab === 'about' && (
           <div style={{
             background: colors.card,
@@ -1478,7 +2009,7 @@ function SettingsPage({ onBack }) {
                 borderBottom: `1px solid ${colors.border}`,
               }}>
                 <span style={{ color: colors.textSecondary }}>App Version</span>
-                <span style={{ color: colors.textPrimary, fontWeight: '600' }}>1.2.0</span>
+                <span style={{ color: colors.textPrimary, fontWeight: '600' }}>2.0.0</span>
               </div>
               <div style={{
                 display: 'flex',

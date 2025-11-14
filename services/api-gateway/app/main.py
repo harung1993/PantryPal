@@ -4,7 +4,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 import httpx
 import os
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from typing import Optional
+from .network_utils import get_client_ip, is_trusted_network
+
 
 # Import auth modules
 from .auth import get_current_auth, require_admin
@@ -689,3 +692,255 @@ async def save_notification_preferences(preferences: dict, auth = Depends(get_cu
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+class UpdateProfileRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class AdminUpdateUserRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None  
+    is_active: Optional[bool] = None
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+@app.get("/api/users/me")
+async def get_my_profile(auth = Depends(get_current_auth)):
+    """Get current user's profile"""
+    if auth.get("type") != "session":
+        raise HTTPException(status_code=403, detail="Profile only available for logged-in users")
+    
+    # Your user_db already has the user info, just return it
+    return {
+        "id": auth.get("id"),
+        "username": auth.get("username"),
+        "email": auth.get("email"),
+        "full_name": auth.get("full_name"),
+        "is_admin": auth.get("is_admin")
+    }
+
+@app.patch("/api/users/me")
+async def update_my_profile(
+    profile: UpdateProfileRequest,
+    auth = Depends(get_current_auth)
+):
+    """Update current user's profile (email, full name)"""
+    if auth.get("type") != "session":
+        raise HTTPException(status_code=403, detail="Profile update only available for logged-in users")
+    
+    # Get current user from database
+    conn = user_db.get_db()
+    cursor = conn.cursor()
+    
+    updates = []
+    params = []
+    
+    if profile.email is not None:
+        # Check if email already taken
+        cursor.execute("SELECT id FROM users WHERE email = ? AND id != ?", (profile.email, auth["id"]))
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Email already in use")
+        updates.append("email = ?")
+        params.append(profile.email)
+    
+    if profile.full_name is not None:
+        updates.append("full_name = ?")
+        params.append(profile.full_name)
+    
+    if not updates:
+        conn.close()
+        return {"message": "No changes made"}
+    
+    params.append(auth["id"])
+    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+    cursor.execute(query, params)
+    conn.commit()
+    conn.close()
+    
+    return {"message": "Profile updated successfully"}
+
+@app.post("/api/users/me/change-password")
+async def change_my_password(
+    password_data: ChangePasswordRequest,
+    auth = Depends(get_current_auth)
+):
+    """Change current user's password"""
+    if auth.get("type") != "session":
+        raise HTTPException(status_code=403, detail="Password change only available for logged-in users")
+    
+    # Get user's current password hash
+    conn = user_db.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT password_hash FROM users WHERE id = ?", (auth["id"],))
+    user = cursor.fetchone()
+    
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not user_db.verify_password(password_data.current_password, user['password_hash']):
+        conn.close()
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    new_password_hash = user_db.hash_password(password_data.new_password)
+    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_password_hash, auth["id"]))
+    conn.commit()
+    conn.close()
+    
+    return {"message": "Password changed successfully"}
+
+# ============================================
+# Admin Endpoints (add these)
+# ============================================
+
+@app.get("/api/admin/users")
+async def list_all_users(auth = Depends(require_admin)):
+    """List all users (admin only)"""
+    users = user_db.list_users()
+    return {
+        "total": len(users),
+        "users": users
+    }
+
+@app.get("/api/admin/users/{user_id}")
+async def get_user_details(user_id: int, auth = Depends(require_admin)):
+    """Get specific user details (admin only)"""
+    conn = user_db.get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, username, email, full_name, is_admin, is_active, created_at, last_login_at
+        FROM users WHERE id = ?
+    """, (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "id": user['id'],
+        "username": user['username'],
+        "email": user['email'],
+        "full_name": user['full_name'],
+        "is_admin": bool(user['is_admin']),
+        "is_active": bool(user['is_active']),
+        "created_at": user['created_at'],
+        "last_login_at": user['last_login_at']
+    }
+
+@app.patch("/api/admin/users/{user_id}")
+async def update_user(
+    user_id: int,
+    user_data: AdminUpdateUserRequest,
+    auth = Depends(require_admin)
+):
+    """Update user details (admin only)"""
+    # Don't allow modifying yourself
+    if user_id == auth["id"]:
+        raise HTTPException(status_code=400, detail="Cannot modify your own account status")
+    
+    conn = user_db.get_db()
+    cursor = conn.cursor()
+    
+    updates = []
+    params = []
+    
+    if user_data.email is not None:
+        cursor.execute("SELECT id FROM users WHERE email = ? AND id != ?", (user_data.email, user_id))
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Email already in use")
+        updates.append("email = ?")
+        params.append(user_data.email)
+    
+    if user_data.full_name is not None:
+        updates.append("full_name = ?")
+        params.append(user_data.full_name)
+    
+    if user_data.is_active is not None:
+        updates.append("is_active = ?")
+        params.append(user_data.is_active)
+    
+    if not updates:
+        conn.close()
+        return {"message": "No changes made"}
+    
+    params.append(user_id)
+    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+    cursor.execute(query, params)
+    conn.commit()
+    conn.close()
+    
+    return {"message": "User updated successfully"}
+
+@app.post("/api/admin/users/{user_id}/reset-password")
+async def admin_reset_password(
+    user_id: int,
+    password_data: AdminResetPasswordRequest,
+    auth = Depends(require_admin)
+):
+    """Reset user's password (admin only)"""
+    success = user_db.update_user_password(user_id, password_data.new_password)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "Password reset successfully"}
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user_account(user_id: int, auth = Depends(require_admin)):
+    """Delete user account (admin only)"""
+    # Don't allow deleting yourself
+    if user_id == auth["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    success = user_db.delete_user(user_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "User deleted successfully"}
+
+@app.get("/api/admin/stats")
+async def get_admin_stats(auth = Depends(require_admin)):
+    """Get system statistics (admin only)"""
+    users = user_db.list_users()
+    
+    total_users = len(users)
+    active_users = sum(1 for u in users if u["is_active"])
+    inactive_users = total_users - active_users
+    admin_users = sum(1 for u in users if u["is_admin"])
+    
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "inactive_users": inactive_users,
+        "admin_users": admin_users
+    }
+
+@app.get("/api/debug/network")
+async def debug_network(request: Request):
+    """Debug endpoint to check IP and network status"""
+    client_ip = get_client_ip(request)
+    is_trusted = is_trusted_network(client_ip)
+    
+    return {
+        "client_ip": client_ip,
+        "is_trusted_network": is_trusted,
+        "headers": {
+            "x-forwarded-for": request.headers.get("x-forwarded-for"),
+            "x-real-ip": request.headers.get("x-real-ip"),
+            "host": request.headers.get("host"),
+        },
+        "auth_mode": AUTH_MODE,
+        "trusted_networks": os.getenv("TRUSTED_NETWORKS", "192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,127.0.0.0/8")
+    }

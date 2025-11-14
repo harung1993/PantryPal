@@ -36,73 +36,95 @@ export default function App() {
     try {
       const baseURL = await getApiBaseUrl();
       
-      // Check auth status
-      const statusResponse = await fetch(`${baseURL}/api/auth/status`);
-      const status = await statusResponse.json();
-      
-      // If in smart mode, check if we're authenticated
-      if (status.auth_mode === 'smart' || status.auth_mode === 'full') {
-        // Try to get current user
-        const sessionToken = await AsyncStorage.getItem('SESSION_TOKEN');
-        
-        if (sessionToken) {
-          try {
-            const meResponse = await fetch(`${baseURL}/api/auth/me`, {
-              headers: { 'Cookie': `session_token=${sessionToken}` }
-            });
-            
-            if (meResponse.ok) {
-              const userData = await meResponse.json();
-              setCurrentUser(userData);
-              setNeedsAuth(false);
-              setIsAuthenticated(true);
-            } else {
-              // Session invalid, check if we can access without auth
-              await checkOpenAccess(baseURL);
-            }
-          } catch (error) {
-            await checkOpenAccess(baseURL);
-          }
-        } else {
-          await checkOpenAccess(baseURL);
-        }
-      } else {
-        // none or api_key_only mode
+      // First, check what auth mode the server is in
+      let status;
+      try {
+        const statusResponse = await fetch(`${baseURL}/api/auth/status`, { timeout: 5000 });
+        status = await statusResponse.json();
+        console.log('Auth status:', status);
+      } catch (error) {
+        console.error('Cannot reach server:', error);
+        // Server unreachable - show landing page so user can configure connection
         setNeedsAuth(false);
         setIsAuthenticated(true);
+        setCheckingAuth(false);
+        return;
+      }
+      
+      // If auth mode is 'none', no authentication needed
+      if (status.auth_mode === 'none') {
+        setNeedsAuth(false);
+        setIsAuthenticated(true);
+        setCheckingAuth(false);
+        return;
+      }
+      
+      // Check if we have a session token
+      const sessionToken = await AsyncStorage.getItem('SESSION_TOKEN');
+      
+      if (sessionToken) {
+        // Try to validate the session
+        try {
+          const meResponse = await fetch(`${baseURL}/api/auth/me`, {
+            headers: { 
+              'Authorization': `Bearer ${sessionToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (meResponse.ok) {
+            const userData = await meResponse.json();
+            console.log('Logged in as:', userData);
+            setCurrentUser(userData);
+            setIsAuthenticated(true);
+            setNeedsAuth(false);
+          } else {
+            // Session invalid, show landing
+            console.log('Session invalid, clearing token');
+            await AsyncStorage.removeItem('SESSION_TOKEN');
+            setNeedsAuth(true);
+            setIsAuthenticated(false);
+          }
+        } catch (error) {
+          console.log('Error checking session:', error);
+          await AsyncStorage.removeItem('SESSION_TOKEN');
+          setNeedsAuth(true);
+          setIsAuthenticated(false);
+        }
+      } else {
+        // No session token
+        // For 'full' or 'smart' mode, require login
+        if (status.auth_mode === 'full' || status.auth_mode === 'smart') {
+          setNeedsAuth(true);
+          setIsAuthenticated(false);
+        } else if (status.auth_mode === 'api_key_only') {
+          // Check if we have an API key
+          const apiKey = await AsyncStorage.getItem('API_KEY');
+          if (apiKey) {
+            setNeedsAuth(false);
+            setIsAuthenticated(true);
+          } else {
+            setNeedsAuth(true);
+            setIsAuthenticated(false);
+          }
+        } else {
+          // Unknown mode, allow access
+          setNeedsAuth(false);
+          setIsAuthenticated(true);
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      // Assume open access on error
-      setNeedsAuth(false);
-      setIsAuthenticated(true);
+      // On error, show landing page (safe default)
+      setNeedsAuth(true);
+      setIsAuthenticated(false);
     } finally {
       setCheckingAuth(false);
     }
   };
 
-  const checkOpenAccess = async (baseURL) => {
-    try {
-      // Try to access API without auth
-      const testResponse = await fetch(`${baseURL}/api/items`);
-      
-      if (testResponse.ok) {
-        // Open access or trusted network
-        setNeedsAuth(false);
-        setIsAuthenticated(true);
-      } else if (testResponse.status === 401) {
-        // Auth required
-        setNeedsAuth(true);
-        setIsAuthenticated(false);
-      }
-    } catch (error) {
-      // Assume open access on network error
-      setNeedsAuth(false);
-      setIsAuthenticated(true);
-    }
-  };
-
   const handleLoginSuccess = async (user) => {
+    console.log('Login success, user:', user);
     setCurrentUser(user);
     setIsAuthenticated(true);
     setNeedsAuth(false);
@@ -111,10 +133,17 @@ export default function App() {
   const handleLogout = async () => {
     try {
       const baseURL = await getApiBaseUrl();
-      await fetch(`${baseURL}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include'
-      });
+      const sessionToken = await AsyncStorage.getItem('SESSION_TOKEN');
+      
+      if (sessionToken) {
+        await fetch(`${baseURL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -167,7 +196,13 @@ export default function App() {
           <Stack.Screen name="ManualAdd" component={ManualAddScreen} />
           <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
           <Stack.Screen name="Settings">
-            {props => <SettingsScreen {...props} onLogout={handleLogout} currentUser={currentUser} />}
+            {props => (
+              <SettingsScreen 
+                {...props} 
+                onLogout={handleLogout} 
+                currentUser={currentUser} 
+              />
+            )}
           </Stack.Screen>
         </Stack.Navigator>
       )}

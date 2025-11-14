@@ -39,8 +39,7 @@ services:
       # api_key_only: API keys required for all requests
       # full: Login required for UI, API keys OR session for API
       # smart: Local network = open, external = login/API key required
-      - TRUSTED_NETWORKS=
-      #192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,127.0.0.0/8
+      - TRUSTED_NETWORKS=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,127.0.0.0/8
       - ALLOW_REGISTRATION=true  # Set to false to disable new user signups
       # Email settings (for password reset and notifications)
       # - SMTP_HOST=smtp.gmail.com

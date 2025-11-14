@@ -32,18 +32,30 @@ async def verify_api_key_only(x_api_key: Optional[str] = Header(None)):
     return {"type": "api_key", **key_info}
 
 
-async def verify_session_only(session_token: Optional[str] = Cookie(None, alias="session_token")):
+async def verify_session_only(
+    session_token: Optional[str] = Cookie(None, alias="session_token"),
+    authorization: Optional[str] = Header(None)
+):
     """
-    Verify session token only (for full mode - UI access)
+    Verify session token (supports both cookies and Authorization header)
     """
-    if not session_token:
+    token = None
+    
+    # Try Authorization header first (for mobile)
+    if authorization and authorization.startswith('Bearer '):
+        token = authorization.replace('Bearer ', '')
+    # Fall back to cookie (for web)
+    elif session_token:
+        token = session_token
+    
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Please login.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user_info = validate_session(session_token)
+    user_info = validate_session(token)
     
     if not user_info:
         raise HTTPException(
@@ -57,10 +69,11 @@ async def verify_session_only(session_token: Optional[str] = Cookie(None, alias=
 
 async def verify_api_key_or_session(
     x_api_key: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None, alias="session_token")
+    session_token: Optional[str] = Cookie(None, alias="session_token"),
+    authorization: Optional[str] = Header(None)
 ):
     """
-    Verify either API key or session token (for full mode - API access)
+    Verify either API key or session token (supports both cookies and Authorization header)
     API key takes precedence if both provided
     """
     # Try API key first (for Home Assistant and other services)
@@ -69,7 +82,14 @@ async def verify_api_key_or_session(
         if key_info:
             return {"type": "api_key", **key_info}
     
-    # Try session token (for logged-in users via web/mobile)
+    # Try session token from Authorization header (mobile)
+    if authorization and authorization.startswith('Bearer '):
+        token = authorization.replace('Bearer ', '')
+        user_info = validate_session(token)
+        if user_info:
+            return {"type": "session", **user_info}
+    
+    # Try session token from cookie (web)
     if session_token:
         user_info = validate_session(session_token)
         if user_info:
@@ -86,7 +106,8 @@ async def verify_api_key_or_session(
 async def verify_smart_auth(
     request: Request,
     x_api_key: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None, alias="session_token")
+    session_token: Optional[str] = Cookie(None, alias="session_token"),
+    authorization: Optional[str] = Header(None)
 ):
     """
     Smart authentication mode:
@@ -112,7 +133,14 @@ async def verify_smart_auth(
         if key_info:
             return {"type": "api_key", "trusted": False, **key_info}
     
-    # Try session token
+    # Try session token from Authorization header (mobile)
+    if authorization and authorization.startswith('Bearer '):
+        token = authorization.replace('Bearer ', '')
+        user_info = validate_session(token)
+        if user_info:
+            return {"type": "session", "trusted": False, **user_info}
+    
+    # Try session token from cookie (web)
     if session_token:
         user_info = validate_session(session_token)
         if user_info:
@@ -129,11 +157,13 @@ async def verify_smart_auth(
 async def get_current_auth(
     request: Request,
     x_api_key: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None, alias="session_token")
+    session_token: Optional[str] = Cookie(None, alias="session_token"),
+    authorization: Optional[str] = Header(None)
 ):
     """
     Main authentication dependency - handles all AUTH_MODE options
     Use this for all protected endpoints
+    Supports both cookies (web) and Authorization header (mobile)
     """
     # Mode: none - no authentication required
     if AUTH_MODE == "none":
@@ -145,11 +175,11 @@ async def get_current_auth(
     
     # Mode: full - require either API key or session
     elif AUTH_MODE == "full":
-        return await verify_api_key_or_session(x_api_key, session_token)
+        return await verify_api_key_or_session(x_api_key, session_token, authorization)
     
     # Mode: smart - network-aware authentication
     elif AUTH_MODE == "smart":
-        return await verify_smart_auth(request, x_api_key, session_token)
+        return await verify_smart_auth(request, x_api_key, session_token, authorization)
     
     else:
         raise HTTPException(
@@ -161,7 +191,8 @@ async def get_current_auth(
 async def require_admin(
     request: Request,
     x_api_key: Optional[str] = Header(None),
-    session_token: Optional[str] = Cookie(None, alias="session_token")
+    session_token: Optional[str] = Cookie(None, alias="session_token"),
+    authorization: Optional[str] = Header(None)
 ):
     """
     Require admin user (only works in 'full' or 'smart' mode with session auth)
@@ -174,7 +205,7 @@ async def require_admin(
         )
     
     # Get current auth
-    auth = await get_current_auth(request, x_api_key, session_token)
+    auth = await get_current_auth(request, x_api_key, session_token, authorization)
     
     # Trusted network users are not admin
     if auth.get("type") == "trusted_network":

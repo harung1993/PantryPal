@@ -376,7 +376,7 @@ function App() {
 
   // Show settings page
   if (showSettings) {
-    return <SettingsPage onBack={() => setShowSettings(false)} />;
+  return <SettingsPage onBack={() => setShowSettings(false)} currentUser={currentUser} />;  // ✅ Add currentUser
   }
 
   const stats = getStats();

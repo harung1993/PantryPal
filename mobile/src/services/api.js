@@ -21,15 +21,16 @@ const getApi = async () => {
       headers['X-API-Key'] = apiKey;
     }
     
-    // Add session cookie if available
+    // Add session token as Bearer token (not cookie - doesn't work in React Native)
     if (sessionToken) {
-      headers['Cookie'] = `session_token=${sessionToken}`;
+      headers['Authorization'] = `Bearer ${sessionToken}`;
     }
     
     apiInstance = axios.create({
       baseURL,
       timeout: 10000,
       headers,
+      withCredentials: false, // Don't use cookies in React Native
     });
 
     // Add response interceptor to handle 401 errors
@@ -40,15 +41,12 @@ const getApi = async () => {
           // API key or session missing/invalid
           const message = error.response.data?.detail || 'Authentication required';
           
-          console.error('Authentication error:', message);
+          // Only log, don't alert - let the app handle it
+          console.log('Auth required:', message);
           
-          // Clear invalid credentials
-          if (apiKey) {
-            await AsyncStorage.removeItem('API_KEY');
-          }
-          if (sessionToken) {
-            await AsyncStorage.removeItem('SESSION_TOKEN');
-          }
+          // Clear invalid credentials silently
+          await AsyncStorage.removeItem('API_KEY');
+          await AsyncStorage.removeItem('SESSION_TOKEN');
           apiInstance = null; // Reset instance
         }
         return Promise.reject(error);
@@ -96,54 +94,80 @@ export const checkAuthStatus = async () => {
   }
 };
 
-export const lookupBarcode = async (barcode) => {
+// Helper function for making authenticated requests
+const request = async (method, endpoint, data = null) => {
   const api = await getApi();
-  const response = await api.get(`/api/lookup/${barcode}`);
+  const config = { method, url: endpoint };
+  if (data) {
+    config.data = data;
+  }
+  const response = await api.request(config);
   return response.data;
 };
 
+// Convenience methods
+export const get = (endpoint) => request('GET', endpoint);
+export const post = (endpoint, data) => request('POST', endpoint, data);
+export const put = (endpoint, data) => request('PUT', endpoint, data);
+export const patch = (endpoint, data) => request('PATCH', endpoint, data);
+export const del = (endpoint) => request('DELETE', endpoint);
+
+// API methods
+export const lookupBarcode = async (barcode) => {
+  return await get(`/api/lookup/${barcode}`);
+};
+
 export const addItem = async (barcode, location = 'Basement Pantry', quantity = 1, expiryDate = null) => {
-  const api = await getApi();
-  const response = await api.post('/api/items', {
+  return await post('/api/items', {
     barcode,
     location,
     quantity,
     expiry_date: expiryDate,
   });
-  return response.data;
 };
 
 export const addItemManual = async (itemData) => {
-  const api = await getApi();
-  const response = await api.post('/api/items/manual', itemData);
-  return response.data;
+  return await post('/api/items/manual', itemData);
 };
 
 export const getItems = async (location = null, search = null) => {
-  const api = await getApi();
-  const params = {};
-  if (location) params.location = location;
-  if (search) params.search = search;
-  const response = await api.get('/api/items', { params });
-  return response.data;
+  const params = new URLSearchParams();
+  if (location) params.append('location', location);
+  if (search) params.append('search', search);
+  const queryString = params.toString();
+  return await get(`/api/items${queryString ? '?' + queryString : ''}`);
 };
 
 export const deleteItem = async (itemId) => {
-  const api = await getApi();
-  const response = await api.delete(`/api/items/${itemId}`);
-  return response.data;
+  return await del(`/api/items/${itemId}`);
 };
 
 export const updateItem = async (itemId, updates) => {
-  const api = await getApi();
-  const response = await api.put(`/api/items/${itemId}`, updates);
-  return response.data;
+  return await put(`/api/items/${itemId}`, updates);
 };
 
 export const getLocations = async () => {
-  const api = await getApi();
-  const response = await api.get('/api/locations');
-  return response.data;
+  return await get('/api/locations');
 };
 
-export default { getApi };
+// Export everything
+export default {
+  getApi,
+  resetApiInstance,
+  setApiKey,
+  getApiKey,
+  removeApiKey,
+  checkAuthStatus,
+  get,
+  post,
+  put,
+  patch,
+  delete: del,
+  lookupBarcode,
+  addItem,
+  addItemManual,
+  getItems,
+  deleteItem,
+  updateItem,
+  getLocations,
+};
