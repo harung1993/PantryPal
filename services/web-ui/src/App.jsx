@@ -240,7 +240,7 @@ function App() {
   const renderTable = (itemsToRender) => (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead>
-        <tr style={{ background: gradients.primary, color: 'white' }}>
+        <tr style={{ background: '#d97706', color: '#ffffff' }}>
           <th style={styles.th}>Item</th>
           <th style={styles.th}>Brand</th>
           <th style={styles.th}>Category</th>
@@ -323,12 +323,12 @@ function App() {
     return Object.keys(grouped).map(groupKey => (
       <div key={groupKey} style={{ marginBottom: spacing.xl }}>
         <div style={{
-          background: gradients.primary,
+          background: '#d97706',
           padding: spacing.md,
           borderRadius: borderRadius.md,
           marginBottom: spacing.md,
         }}>
-          <h3 style={{ margin: 0, color: 'white' }}>{groupKey}</h3>
+          <h3 style={{ margin: 0, color: '#ffffff' }}>{groupKey}</h3>
         </div>
         {renderTable(grouped[groupKey])}
       </div>
@@ -376,7 +376,7 @@ function App() {
 
   // Show settings page
   if (showSettings) {
-  return <SettingsPage onBack={() => setShowSettings(false)} currentUser={currentUser} />;  // ✅ Add currentUser
+    return <SettingsPage onBack={() => setShowSettings(false)} currentUser={currentUser} />;
   }
 
   const stats = getStats();
@@ -782,10 +782,12 @@ const styles = {
     padding: spacing.md,
     textAlign: 'left',
     fontWeight: 'bold',
+    color: '#ffffff',
   },
   td: {
     padding: spacing.md,
     borderBottom: `1px solid ${colors.border}`,
+    color: colors.textPrimary,
   },
   deleteButton: {
     backgroundColor: 'transparent',
@@ -807,8 +809,10 @@ const styles = {
     width: '100%',
     padding: spacing.md,
     borderRadius: borderRadius.md,
-    border: `1px solid ${colors.border}`,
+    border: `2px solid ${colors.borderMedium}`,
     fontSize: '16px',
+    color: colors.textPrimary,
+    backgroundColor: '#fffef5',  // Soft cream/ivory background - easier on eyes
   },
 };
 
