@@ -40,15 +40,15 @@ services:
       # full: Login required for UI, API keys OR session for API
       # smart: Local network = open, external = login/API key required
       - TRUSTED_NETWORKS=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,127.0.0.0/8
-      - ALLOW_REGISTRATION=true  # Set to false to disable new user signups
+      - ALLOW_REGISTRATION=false  # Set to false to disable new user signups
       # Email settings (for password reset and notifications)
-      # - SMTP_HOST=smtp.gmail.com
-      # - SMTP_PORT=587
-      # - SMTP_USERNAME=your-email@gmail.com
-      # - SMTP_PASSWORD=your-app-password
-      # - SMTP_FROM_EMAIL=pantrypal@yourdomain.com
-      # - SMTP_FROM_NAME=PantryPal
-      # - SMTP_USE_TLS=true
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME}
+      - SMTP_USE_TLS=${SMTP_USE_TLS}
     volumes:
       - ./data:/app/data
     networks:
