@@ -1,33 +1,44 @@
-GNU AFFERO GENERAL PUBLIC LICENSE
-Version 3, 19 November 2007
+# Personal Use License
 
-Copyright (C) 2025 Harun
+Copyright (c) 2025 Harun Gunasekaran
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+## Terms of Use
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
+This software (PantryPal) is made available for **personal, non-commercial use only**.
 
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
+### You MAY:
+- Use this software for personal and family household management
+- Install and run it on your own personal servers or devices
+- Modify the code for your own personal use
+- Share the source code with others for their personal use
+
+### You MAY NOT:
+- Use this software for commercial purposes
+- Sell this software or any derivatives
+- Offer this software as a hosted service to others for profit
+- Remove or modify this license or copyright notice
+- Use this software in any business or enterprise setting
+
+## Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Attribution
+
+If you share modifications or derivatives of this software, you must:
+- Credit the original author (Harun Gunasekaran)
+- Include this license
+- Clearly indicate what changes were made
 
 ---
 
-Full license text: https://www.gnu.org/licenses/agpl-3.0.txt
+**Part of the PalStack ecosystem**  
+*"That's what pals do – they show up and help with the everyday stuff."*
 
----
-
-ADDITIONAL TERMS:
-
-PantryPal - Self-Hosted Pantry Inventory System
-Copyright (C) 2025 Harun
-
-Network Use: If you modify this software and make it available over a network,
-you must make your modified source code available under the same AGPL-3.0 license.
-
-This ensures that improvements to PantryPal benefit the entire community.
+For questions about commercial use or licensing, please contact the author.
