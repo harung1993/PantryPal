@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, shadows } from '../styles/colors';
 import { getApiBaseUrl } from '../../config';
+import api from '../services/api';
 
 export default function SignupScreen({ navigation, onLoginSuccess }) {
   const [username, setUsername] = useState('');
@@ -68,6 +69,9 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
         // Store session token
         await AsyncStorage.setItem('SESSION_TOKEN', data.session_token);
         
+        // CRITICAL: Reset API instance so it picks up the new session token
+        api.resetApiInstance();
+        
         Alert.alert(
           'Account Created!',
           'Welcome to PantryPal! Your account has been created successfully.',
@@ -89,7 +93,10 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -99,8 +106,8 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
 
         <View style={styles.header}>
           <Text style={styles.icon}>🥫</Text>
-          <Text style={styles.title}>Create Your Account</Text>
-          <Text style={styles.subtitle}>Join PantryPal and start tracking your inventory</Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join PantryPal today</Text>
         </View>
 
         <View style={styles.form}>
@@ -111,10 +118,9 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
               value={username}
               onChangeText={setUsername}
               placeholder="Choose a username"
-              placeholderTextColor={colors.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!loading}
+              autoFocus
             />
           </View>
 
@@ -125,24 +131,20 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
               value={email}
               onChangeText={setEmail}
               placeholder="your.email@example.com"
-              placeholderTextColor={colors.textSecondary}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!loading}
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>Full Name (optional)</Text>
             <TextInput
               style={styles.input}
               value={fullName}
               onChangeText={setFullName}
-              placeholder="Your full name (optional)"
-              placeholderTextColor={colors.textSecondary}
+              placeholder="John Doe"
               autoCorrect={false}
-              editable={!loading}
             />
           </View>
 
@@ -153,12 +155,10 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
                 style={[styles.input, styles.passwordInput]}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Minimum 8 characters"
-                placeholderTextColor={colors.textSecondary}
+                placeholder="At least 8 characters"
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!loading}
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
@@ -169,7 +169,6 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
                 </Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.hint}>Minimum 8 characters</Text>
           </View>
 
           <View style={styles.inputGroup}>
@@ -178,12 +177,10 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
               style={styles.input}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              placeholder="Re-enter password"
-              placeholderTextColor={colors.textSecondary}
+              placeholder="Re-enter your password"
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!loading}
             />
           </View>
 
@@ -204,13 +201,6 @@ export default function SignupScreen({ navigation, onLoginSuccess }) {
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
               <Text style={styles.loginLink}>Sign in</Text>
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.disclaimer}>
-            <Text style={styles.disclaimerText}>
-              By creating an account, you agree to use PantryPal responsibly. 
-              All data is stored locally on your server.
-            </Text>
           </View>
         </View>
       </ScrollView>
@@ -245,7 +235,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: colors.textPrimary,
     marginBottom: spacing.xs,
@@ -255,7 +245,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textPrimary,
     opacity: 0.9,
-    textAlign: 'center',
   },
   form: {
     backgroundColor: colors.card,
@@ -296,18 +285,12 @@ const styles = StyleSheet.create({
   showPasswordText: {
     fontSize: 20,
   },
-  hint: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
   signupButton: {
     backgroundColor: colors.primary,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     ...shadows.medium,
-    marginTop: spacing.md,
   },
   signupButtonDisabled: {
     opacity: 0.6,
@@ -330,17 +313,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
-  },
-  disclaimer: {
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-  },
-  disclaimerText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });

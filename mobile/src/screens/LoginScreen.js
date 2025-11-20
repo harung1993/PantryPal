@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius, shadows } from '../styles/colors';
 import { getApiBaseUrl } from '../../config';
+import api from '../services/api';
 
 export default function LoginScreen({ navigation, onLoginSuccess }) {
   const [username, setUsername] = useState('');
@@ -46,6 +47,9 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
         // Store session token
         await AsyncStorage.setItem('SESSION_TOKEN', data.session_token);
         
+        // CRITICAL: Reset API instance so it picks up the new session token
+        api.resetApiInstance();
+        
         Alert.alert('Success', 'Login successful!', [
           { text: 'OK', onPress: () => onLoginSuccess(data.user) }
         ]);
@@ -65,7 +69,10 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -75,8 +82,8 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
 
         <View style={styles.header}>
           <Text style={styles.icon}>🥫</Text>
-          <Text style={styles.title}>Sign In to PantryPal</Text>
-          <Text style={styles.subtitle}>Welcome back!</Text>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to PantryPal</Text>
         </View>
 
         <View style={styles.form}>
@@ -87,10 +94,9 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
               value={username}
               onChangeText={setUsername}
               placeholder="Enter your username"
-              placeholderTextColor={colors.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
-              editable={!loading}
+              autoFocus
             />
           </View>
 
@@ -102,11 +108,9 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Enter your password"
-                placeholderTextColor={colors.textSecondary}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!loading}
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}

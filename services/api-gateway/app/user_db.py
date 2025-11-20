@@ -234,8 +234,9 @@ def validate_session(session_token: str) -> Optional[Dict]:
     """, (datetime.now(), session['id']))
     conn.commit()
     
+    # FIXED: Return "id" instead of "user_id" for consistency with main.py
     result = {
-        "user_id": session['user_id'],
+        "id": session['user_id'],  # Changed from "user_id" to "id"
         "username": session['username'],
         "email": session['email'],
         "full_name": session['full_name'],
@@ -355,8 +356,7 @@ def create_default_admin():
         """, ("admin", password_hash, None, "Administrator", True, created_at, True))
         
         conn.commit()
-        print("✅ Created default admin user (username: admin, password: admin)")
-        print("⚠️  IMPORTANT: Change the admin password immediately!")
+      
     
     conn.close()
 

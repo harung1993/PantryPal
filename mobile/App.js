@@ -5,6 +5,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from './src/styles/colors';
 import { getApiBaseUrl } from './config';
+import api from './src/services/api'; // ADD THIS IMPORT
 
 // Main app screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -75,7 +76,12 @@ export default function App() {
           if (meResponse.ok) {
             const userData = await meResponse.json();
             console.log('Logged in as:', userData);
-            setCurrentUser(userData);
+            
+            // Only set currentUser if it's an actual session, not trusted network
+            if (userData.type !== 'trusted_network') {
+              setCurrentUser(userData);
+            }
+            
             setIsAuthenticated(true);
             setNeedsAuth(false);
           } else {
@@ -93,8 +99,30 @@ export default function App() {
         }
       } else {
         // No session token
-        // For 'full' or 'smart' mode, require login
-        if (status.auth_mode === 'full' || status.auth_mode === 'smart') {
+        // For 'smart' mode on trusted network, allow access without login
+        if (status.auth_mode === 'smart') {
+          // Check if we're on trusted network
+          try {
+            const meResponse = await fetch(`${baseURL}/api/auth/me`);
+            if (meResponse.ok) {
+              const userData = await meResponse.json();
+              if (userData.type === 'trusted_network') {
+                // Trusted network - allow access without setting currentUser
+                setNeedsAuth(false);
+                setIsAuthenticated(true);
+              } else {
+                setNeedsAuth(true);
+                setIsAuthenticated(false);
+              }
+            } else {
+              setNeedsAuth(true);
+              setIsAuthenticated(false);
+            }
+          } catch {
+            setNeedsAuth(true);
+            setIsAuthenticated(false);
+          }
+        } else if (status.auth_mode === 'full') {
           setNeedsAuth(true);
           setIsAuthenticated(false);
         } else if (status.auth_mode === 'api_key_only') {
@@ -125,6 +153,10 @@ export default function App() {
 
   const handleLoginSuccess = async (user) => {
     console.log('Login success, user:', user);
+    
+    // CRITICAL: Reset API instance so it picks up the new session token
+    api.resetApiInstance();
+    
     setCurrentUser(user);
     setIsAuthenticated(true);
     setNeedsAuth(false);
@@ -149,6 +181,10 @@ export default function App() {
     }
     
     await AsyncStorage.removeItem('SESSION_TOKEN');
+    
+    // Reset API instance on logout too
+    api.resetApiInstance();
+    
     setCurrentUser(null);
     setIsAuthenticated(false);
     setNeedsAuth(true);

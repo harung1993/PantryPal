@@ -8,25 +8,18 @@ import { colors, spacing, borderRadius } from '../styles/colors';
 import api from '../services/api';
 
 export default function SettingsScreen({ navigation, currentUser, onLogout }) {
-  const [activeTab, setActiveTab] = useState('connection');
-  
   // Connection settings
   const [serverUrl, setServerUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [useApiKey, setUseApiKey] = useState(false);
   
   // Profile state
-  const [profile, setProfile] = useState({
-    email: '',
-    full_name: ''
-  });
+  const [profile, setProfile] = useState({ email: '', full_name: '' });
   const [profileLoading, setProfileLoading] = useState(false);
   
   // Password state
   const [passwordData, setPasswordData] = useState({
-    current_password: '',
-    new_password: '',
-    confirm_password: ''
+    current_password: '', new_password: '', confirm_password: ''
   });
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -35,19 +28,30 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
+  
+  // Invite user state
+  const [inviteData, setInviteData] = useState({
+    username: '', email: '', full_name: '', password: ''
+  });
+  const [inviteLoading, setInviteLoading] = useState(false);
 
+  // Check if user is on trusted network (not actually logged in)
+  const isTrustedNetwork = !currentUser || currentUser?.type === 'trusted_network';
+  const isActualUser = currentUser && !isTrustedNetwork; // Any logged in user (not just trusted network)
   const isAdmin = currentUser?.is_admin;
 
   useEffect(() => {
     loadConnectionSettings();
-    if (currentUser) {
+    
+    // Only load profile for actual logged-in users
+    if (isActualUser) {
       loadProfile();
       if (isAdmin) {
         loadUsers();
         loadStats();
       }
     }
-  }, [currentUser, isAdmin]);
+  }, [currentUser, isActualUser, isAdmin]);
 
   const loadConnectionSettings = async () => {
     const url = await AsyncStorage.getItem('API_BASE_URL');
@@ -69,7 +73,7 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
       } else {
         await AsyncStorage.removeItem('API_KEY');
       }
-      Alert.alert('Success', 'Connection settings saved. Please restart the app for changes to take effect.');
+      Alert.alert('Success', 'Connection settings saved. Please restart the app.');
     } catch (error) {
       Alert.alert('Error', 'Failed to save settings');
     }
@@ -77,11 +81,8 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
 
   const loadProfile = async () => {
     try {
-      const data = await api.get('/users/me');
-      setProfile({
-        email: data.email || '',
-        full_name: data.full_name || ''
-      });
+      const data = await api.get('/api/users/me');
+      setProfile({ email: data.email || '', full_name: data.full_name || '' });
     } catch (error) {
       console.error('Failed to load profile:', error);
     }
@@ -89,9 +90,8 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
 
   const handleUpdateProfile = async () => {
     setProfileLoading(true);
-
     try {
-      await api.patch('/users/me', profile);
+      await api.patch('/api/users/me', profile);
       Alert.alert('Success', '✅ Profile updated successfully');
     } catch (error) {
       Alert.alert('Error', error.response?.data?.detail || 'Failed to update profile');
@@ -105,20 +105,16 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
       Alert.alert('Error', 'New passwords do not match');
       return;
     }
-
     if (passwordData.new_password.length < 8) {
       Alert.alert('Error', 'Password must be at least 8 characters');
       return;
     }
-
     setPasswordLoading(true);
-
     try {
-      await api.post('/users/me/change-password', {
+      await api.post('/api/users/me/change-password', {
         current_password: passwordData.current_password,
         new_password: passwordData.new_password
       });
-      
       Alert.alert('Success', '✅ Password changed successfully');
       setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
     } catch (error) {
@@ -131,13 +127,11 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
   const loadUsers = async () => {
     setAdminLoading(true);
     try {
-      const data = await api.get('/admin/users');
-      console.log('Loaded users:', data);
-      setUsers(data.users || []); // Ensure we always have an array
+      const data = await api.get('/api/admin/users');
+      setUsers(data.users || []);
     } catch (error) {
       console.error('Failed to load users:', error);
-      setUsers([]); // Set empty array on error
-      Alert.alert('Error', 'Failed to load users');
+      setUsers([]);
     } finally {
       setAdminLoading(false);
     }
@@ -145,20 +139,40 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
 
   const loadStats = async () => {
     try {
-      const data = await api.get('/admin/stats');
-      console.log('Loaded stats:', data);
+      const data = await api.get('/api/admin/stats');
       setStats(data || null);
     } catch (error) {
       console.error('Failed to load stats:', error);
-      setStats(null);
+    }
+  };
+
+  const handleInviteUser = async () => {
+    if (!inviteData.username || !inviteData.email || !inviteData.password) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+    if (inviteData.password.length < 8) {
+      Alert.alert('Error', 'Password must be at least 8 characters');
+      return;
+    }
+    
+    setInviteLoading(true);
+    try {
+      await api.post('/api/auth/register', inviteData);
+      Alert.alert('Success', `✅ User ${inviteData.username} created successfully!`);
+      setInviteData({ username: '', email: '', full_name: '', password: '' });
+      loadUsers();
+      loadStats();
+    } catch (error) {
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to create user');
+    } finally {
+      setInviteLoading(false);
     }
   };
 
   const handleToggleUserStatus = async (userId, currentStatus) => {
     try {
-      await api.patch(`/admin/users/${userId}`, {
-        is_active: !currentStatus
-      });
+      await api.patch(`/api/admin/users/${userId}`, { is_active: !currentStatus });
       loadUsers();
       loadStats();
       Alert.alert('Success', `User ${currentStatus ? 'disabled' : 'enabled'} successfully`);
@@ -170,7 +184,7 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
   const handleDeleteUser = async (userId, username) => {
     Alert.alert(
       'Delete User',
-      `Are you sure you want to delete "${username}"? This action cannot be undone.`,
+      `Are you sure you want to delete "${username}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -178,7 +192,7 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete(`/admin/users/${userId}`);
+              await api.delete(`/api/admin/users/${userId}`);
               loadUsers();
               loadStats();
               Alert.alert('Success', 'User deleted successfully');
@@ -191,19 +205,6 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
     );
   };
 
-  // Debug logging
-  useEffect(() => {
-    console.log('SettingsScreen - currentUser:', currentUser);
-    console.log('SettingsScreen - isAdmin:', isAdmin);
-  }, [currentUser, isAdmin]);
-
-  const tabs = [
-    { id: 'connection', label: '🌐 Connection', show: true },
-    { id: 'profile', label: '👤 Profile', show: !!currentUser },
-    { id: 'admin', label: '👥 Admin', show: isAdmin },
-    { id: 'about', label: 'ℹ️ About', show: true },
-  ].filter(tab => tab.show);
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -215,13 +216,22 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
         <View style={{ width: 60 }} />
       </View>
 
-      {/* User Info */}
+      {/* User Info Bar */}
       {currentUser && (
         <View style={styles.userInfo}>
-          <View>
-            <Text style={styles.username}>{currentUser.username}</Text>
-            {currentUser.email && (
-              <Text style={styles.userEmail}>{currentUser.email}</Text>
+          <View style={{ flex: 1 }}>
+            {isTrustedNetwork ? (
+              <>
+                <Text style={styles.username}>🏠 Local Network Access</Text>
+                <Text style={styles.userEmail}>Connected via trusted network</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.username}>{currentUser.username}</Text>
+                {currentUser.email && (
+                  <Text style={styles.userEmail}>{currentUser.email}</Text>
+                )}
+              </>
             )}
           </View>
           {isAdmin && (
@@ -232,110 +242,239 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
         </View>
       )}
 
-      {/* Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer}>
-        <View style={styles.tabs}>
-          {tabs.map(tab => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tab, activeTab === tab.id && styles.tabActive]}
-              onPress={() => setActiveTab(tab.id)}
-            >
-              <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* CONNECTION SECTION */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🌐 Connection</Text>
+          <Text style={styles.sectionDescription}>Configure your PantryPal server connection</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Server URL</Text>
+            <TextInput
+              style={styles.input}
+              value={serverUrl}
+              onChangeText={setServerUrl}
+              placeholder="http://192.168.1.100"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
 
-      <ScrollView style={styles.content}>
-        {/* CONNECTION TAB */}
-        {activeTab === 'connection' && (
-          <View>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Server Configuration</Text>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Server URL</Text>
-                <TextInput
-                  style={styles.input}
-                  value={serverUrl}
-                  onChangeText={setServerUrl}
-                  placeholder="http://192.168.1.100"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Text style={styles.hint}>
-                  Example: http://192.168.68.119 or http://macmini.local
-                </Text>
-              </View>
+          <View style={styles.toggleRow}>
+            <Text style={styles.label}>Use API Key</Text>
+            <Switch
+              value={useApiKey}
+              onValueChange={setUseApiKey}
+              trackColor={{ false: '#d1d5db', true: colors.primary }}
+              thumbColor="#ffffff"
+            />
+          </View>
 
-              <View style={styles.inputGroup}>
-                <View style={styles.switchRow}>
-                  <Text style={styles.label}>Use API Key</Text>
-                  <Switch
-                    value={useApiKey}
-                    onValueChange={setUseApiKey}
-                    trackColor={{ false: '#ccc', true: colors.primary }}
-                    thumbColor="#fff"
-                  />
-                </View>
-                
-                {useApiKey && (
-                  <>
-                    <TextInput
-                      style={[styles.input, { fontFamily: 'monospace', fontSize: 12 }]}
-                      value={apiKey}
-                      onChangeText={setApiKey}
-                      placeholder="pp_xxxxxxxxxxxxxxxx"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      secureTextEntry
-                    />
-                    <Text style={styles.hint}>
-                      Required for api_key_only or full auth mode
-                    </Text>
-                  </>
-                )}
-              </View>
-
-              <TouchableOpacity
-                style={styles.button}
-                onPress={saveConnectionSettings}
-              >
-                <Text style={styles.buttonText}>💾 Save Connection</Text>
-              </TouchableOpacity>
+          {useApiKey && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>API Key</Text>
+              <TextInput
+                style={styles.input}
+                value={apiKey}
+                onChangeText={setApiKey}
+                placeholder="Enter your API key"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
             </View>
+          )}
+
+          <TouchableOpacity style={styles.button} onPress={saveConnectionSettings}>
+            <Text style={styles.buttonText}>💾 Save Connection</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* PROFILE SECTION - Only for actual logged in users */}
+        {isActualUser && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>👤 My Profile</Text>
+            <Text style={styles.sectionDescription}>Update your account information</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Username (read-only)</Text>
+              <TextInput
+                style={[styles.input, styles.inputDisabled]}
+                value={currentUser.username}
+                editable={false}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>📧 Email Address</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.email}
+                onChangeText={(text) => setProfile({ ...profile, email: text })}
+                placeholder="your.email@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput
+                style={styles.input}
+                value={profile.full_name}
+                onChangeText={(text) => setProfile({ ...profile, full_name: text })}
+                placeholder="John Doe"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleUpdateProfile}
+              disabled={profileLoading}
+            >
+              {profileLoading ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.buttonText}>💾 Save Changes</Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* PROFILE TAB */}
-        {activeTab === 'profile' && currentUser && (
-          <View>
-            {/* Profile Information */}
+        {/* PASSWORD SECTION - Only for actual logged in users */}
+        {isActualUser && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>🔒 Change Password</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPasswords(!showPasswords)}>
+                <Text style={styles.showPasswordText}>
+                  {showPasswords ? '🙈 Hide' : '👁️ Show'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Current Password</Text>
+              <TextInput
+                style={styles.input}
+                value={passwordData.current_password}
+                onChangeText={(text) => setPasswordData({ ...passwordData, current_password: text })}
+                placeholder="Enter current password"
+                secureTextEntry={!showPasswords}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>New Password</Text>
+              <TextInput
+                style={styles.input}
+                value={passwordData.new_password}
+                onChangeText={(text) => setPasswordData({ ...passwordData, new_password: text })}
+                placeholder="Enter new password"
+                secureTextEntry={!showPasswords}
+                autoCapitalize="none"
+              />
+              <Text style={styles.hint}>Minimum 8 characters</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Confirm New Password</Text>
+              <TextInput
+                style={styles.input}
+                value={passwordData.confirm_password}
+                onChangeText={(text) => setPasswordData({ ...passwordData, confirm_password: text })}
+                placeholder="Confirm new password"
+                secureTextEntry={!showPasswords}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleChangePassword}
+              disabled={passwordLoading}
+            >
+              {passwordLoading ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                <Text style={styles.buttonText}>🔑 Change Password</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* LOGIN PROMPT - For trusted network users */}
+        {isTrustedNetwork && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🔐 Account Access</Text>
+            <Text style={styles.sectionDescription}>
+              You're currently using local network access. To manage your profile and access admin features, you need to log in with an account.
+            </Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={onLogout}
+            >
+              <Text style={styles.buttonText}>🔑 Login with Account</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ADMIN SECTION */}
+        {isAdmin && (
+          <>
+            {/* Stats */}
+            {stats && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>📊 Statistics</Text>
+                <View style={styles.statsGrid}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{stats.total_users}</Text>
+                    <Text style={styles.statLabel}>Total</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.active_users}</Text>
+                    <Text style={styles.statLabel}>Active</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={[styles.statValue, { color: '#ef4444' }]}>{stats.inactive_users}</Text>
+                    <Text style={styles.statLabel}>Inactive</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={[styles.statValue, { color: colors.primary }]}>{stats.admin_users}</Text>
+                    <Text style={styles.statLabel}>Admins</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Invite User */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Profile Information</Text>
+              <Text style={styles.sectionTitle}>➕ Invite User</Text>
+              <Text style={styles.sectionDescription}>Create a new user account</Text>
               
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Username (read-only)</Text>
+                <Text style={styles.label}>Username *</Text>
                 <TextInput
-                  style={[styles.input, styles.inputDisabled]}
-                  value={currentUser.username}
-                  editable={false}
+                  style={styles.input}
+                  value={inviteData.username}
+                  onChangeText={(text) => setInviteData({ ...inviteData, username: text })}
+                  placeholder="username"
+                  autoCapitalize="none"
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>📧 Email Address</Text>
+                <Text style={styles.label}>Email *</Text>
                 <TextInput
                   style={styles.input}
-                  value={profile.email}
-                  onChangeText={(text) => setProfile({ ...profile, email: text })}
-                  placeholder="your.email@example.com"
+                  value={inviteData.email}
+                  onChangeText={(text) => setInviteData({ ...inviteData, email: text })}
+                  placeholder="user@example.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  autoCorrect={false}
                 />
               </View>
 
@@ -343,236 +482,118 @@ export default function SettingsScreen({ navigation, currentUser, onLogout }) {
                 <Text style={styles.label}>Full Name</Text>
                 <TextInput
                   style={styles.input}
-                  value={profile.full_name}
-                  onChangeText={(text) => setProfile({ ...profile, full_name: text })}
+                  value={inviteData.full_name}
+                  onChangeText={(text) => setInviteData({ ...inviteData, full_name: text })}
                   placeholder="John Doe"
-                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Password *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={inviteData.password}
+                  onChangeText={(text) => setInviteData({ ...inviteData, password: text })}
+                  placeholder="Min 8 characters"
+                  secureTextEntry
+                  autoCapitalize="none"
                 />
               </View>
 
               <TouchableOpacity
                 style={styles.button}
-                onPress={handleUpdateProfile}
-                disabled={profileLoading}
+                onPress={handleInviteUser}
+                disabled={inviteLoading}
               >
-                {profileLoading ? (
+                {inviteLoading ? (
                   <ActivityIndicator color={colors.textPrimary} />
                 ) : (
-                  <Text style={styles.buttonText}>Save Changes</Text>
+                  <Text style={styles.buttonText}>✉️ Create User</Text>
                 )}
               </TouchableOpacity>
             </View>
-
-            {/* Change Password */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>🔒 Change Password</Text>
-                <TouchableOpacity onPress={() => setShowPasswords(!showPasswords)}>
-                  <Text style={styles.showPasswordText}>
-                    {showPasswords ? '🙈 Hide' : '👁️ Show'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Current Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={passwordData.current_password}
-                  onChangeText={(text) => setPasswordData({ ...passwordData, current_password: text })}
-                  placeholder="Enter current password"
-                  secureTextEntry={!showPasswords}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>New Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={passwordData.new_password}
-                  onChangeText={(text) => setPasswordData({ ...passwordData, new_password: text })}
-                  placeholder="Enter new password"
-                  secureTextEntry={!showPasswords}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Text style={styles.hint}>Minimum 8 characters</Text>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Confirm New Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={passwordData.confirm_password}
-                  onChangeText={(text) => setPasswordData({ ...passwordData, confirm_password: text })}
-                  placeholder="Confirm new password"
-                  secureTextEntry={!showPasswords}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.button}
-                onPress={handleChangePassword}
-                disabled={passwordLoading}
-              >
-                {passwordLoading ? (
-                  <ActivityIndicator color={colors.textPrimary} />
-                ) : (
-                  <Text style={styles.buttonText}>Change Password</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Logout Button */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={[styles.button, styles.logoutButton]}
-                onPress={onLogout}
-              >
-                <Text style={styles.buttonText}>🚪 Logout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ADMIN TAB */}
-        {activeTab === 'admin' && isAdmin && (
-          <View>
-            {/* Statistics */}
-            {stats && (
-              <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{stats.total_users}</Text>
-                  <Text style={styles.statLabel}>Total Users</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, { color: '#10b981' }]}>{stats.active_users}</Text>
-                  <Text style={styles.statLabel}>Active</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, { color: '#ef4444' }]}>{stats.inactive_users}</Text>
-                  <Text style={styles.statLabel}>Inactive</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={[styles.statValue, { color: colors.primary }]}>{stats.admin_users}</Text>
-                  <Text style={styles.statLabel}>Admins</Text>
-                </View>
-              </View>
-            )}
 
             {/* User Management */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>👥 User Management</Text>
               
               {adminLoading ? (
-                <View style={{ padding: spacing.xl, alignItems: 'center' }}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <Text style={{ marginTop: spacing.md, color: colors.textSecondary }}>
-                    Loading users...
-                  </Text>
-                </View>
+                <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: spacing.xl }} />
               ) : users.length === 0 ? (
-                <View style={{ padding: spacing.xl, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 48, marginBottom: spacing.md }}>👥</Text>
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textSecondary }}>
-                    No users found
-                  </Text>
-                </View>
+                <Text style={styles.emptyText}>No users found</Text>
               ) : (
-                <View>
-                  {users.map((user) => (
-                    <View key={user.id} style={styles.userCard}>
-                      <View style={styles.userCardHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.userCardName}>{user.username}</Text>
-                          <Text style={styles.userCardEmail}>{user.email || 'No email'}</Text>
-                          {user.full_name && (
-                            <Text style={styles.userCardDetail}>{user.full_name}</Text>
-                          )}
-                        </View>
-                        <View style={styles.badges}>
-                          {user.is_admin && (
-                            <View style={styles.adminBadgeSmall}>
-                              <Text style={styles.adminBadgeTextSmall}>Admin</Text>
-                            </View>
-                          )}
-                          <View style={[
-                            styles.statusBadge,
-                            user.is_active ? styles.statusActive : styles.statusInactive
-                          ]}>
-                            <Text style={[
-                              styles.statusBadgeText,
-                              { color: user.is_active ? '#065f46' : '#991b1b' }
-                            ]}>
-                              {user.is_active ? 'Active' : 'Disabled'}
-                            </Text>
-                          </View>
-                        </View>
+                users.map((user) => (
+                  <View key={user.id} style={styles.userCard}>
+                    <View style={styles.userCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userCardName}>
+                          {user.username}
+                          {user.is_admin && <Text style={{ color: colors.primary }}> (Admin)</Text>}
+                        </Text>
+                        <Text style={styles.userCardEmail}>{user.email}</Text>
                       </View>
-
-                      {user.id !== currentUser?.id && (
-                        <View style={styles.userCardActions}>
-                          <TouchableOpacity
-                            style={[styles.actionButton, styles.actionButtonPrimary]}
-                            onPress={() => handleToggleUserStatus(user.id, user.is_active)}
-                          >
-                            <Text style={styles.actionButtonText}>
-                              {user.is_active ? 'Disable' : 'Enable'}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={[styles.actionButton, styles.actionButtonDanger]}
-                            onPress={() => handleDeleteUser(user.id, user.username)}
-                          >
-                            <Text style={styles.actionButtonText}>Delete</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
+                      <View style={[
+                        styles.statusBadge,
+                        { backgroundColor: user.is_active ? '#10b981' : '#ef4444' }
+                      ]}>
+                        <Text style={styles.statusBadgeText}>
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </Text>
+                      </View>
                     </View>
-                  ))}
-                </View>
+
+                    <View style={styles.userCardActions}>
+                      <TouchableOpacity
+                        style={[styles.userActionButton, { backgroundColor: user.is_active ? '#fef3c7' : '#d1fae5' }]}
+                        onPress={() => handleToggleUserStatus(user.id, user.is_active)}
+                      >
+                        <Text style={[styles.userActionButtonText, { color: user.is_active ? '#92400e' : '#065f46' }]}>
+                          {user.is_active ? 'Disable' : 'Enable'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.userActionButton, { backgroundColor: '#fee2e2' }]}
+                        onPress={() => handleDeleteUser(user.id, user.username)}
+                      >
+                        <Text style={[styles.userActionButtonText, { color: '#991b1b' }]}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
               )}
             </View>
-          </View>
+          </>
         )}
 
-        {/* ABOUT TAB */}
-        {activeTab === 'about' && (
+        {/* LOGOUT SECTION - Only for actual logged in users */}
+        {isActualUser && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About PantryPal</Text>
-            
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Version</Text>
-              <Text style={styles.aboutValue}>2.0.0</Text>
-            </View>
-            
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Server</Text>
-              <Text style={[styles.aboutValue, { flex: 1, textAlign: 'right' }]} numberOfLines={1}>
-                {serverUrl || 'Not configured'}
-              </Text>
-            </View>
-            
-            <View style={styles.aboutRow}>
-              <Text style={styles.aboutLabel}>Platform</Text>
-              <Text style={styles.aboutValue}>Mobile App</Text>
-            </View>
-
-            <View style={styles.aboutFooter}>
-              <Text style={{ fontSize: 48, marginBottom: spacing.md }}>🥫</Text>
-              <Text style={styles.aboutTitle}>PantryPal</Text>
-              <Text style={styles.aboutSubtitle}>Part of PalStack</Text>
-              <Text style={styles.aboutDescription}>
-                Self-hosted pantry management for modern homes
-              </Text>
-            </View>
+            <TouchableOpacity
+              style={[styles.button, styles.logoutButton]}
+              onPress={onLogout}
+            >
+              <Text style={[styles.buttonText, { color: '#ffffff' }]}>🚪 Logout</Text>
+            </TouchableOpacity>
           </View>
         )}
+
+        {/* ABOUT SECTION */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ℹ️ About PantryPal</Text>
+          <Text style={styles.aboutText}>Version 1.3.0</Text>
+          <Text style={styles.aboutText}>
+            Self-hosted pantry management for your home.{'\n'}
+            Part of the PalStack ecosystem.
+          </Text>
+          <Text style={[styles.aboutText, { fontStyle: 'italic', marginTop: spacing.md }]}>
+            "That's what pals do – they show up and help with the everyday stuff."
+          </Text>
+        </View>
+
+        <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </View>
   );
@@ -636,35 +657,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  tabsContainer: {
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    maxHeight: 50,
-  },
-  tabs: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.sm,
-  },
-  tab: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginRight: spacing.xs,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: colors.primary,
-  },
-  tabText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
   content: {
     flex: 1,
   },
@@ -678,17 +670,23 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.textPrimary,
+    marginBottom: spacing.xs,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: colors.textSecondary,
     marginBottom: spacing.md,
+    lineHeight: 20,
   },
   inputGroup: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   label: {
     fontSize: 14,
@@ -698,68 +696,65 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    fontSize: 16,
-    color: colors.textPrimary,
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.textPrimary,
   },
   inputDisabled: {
     backgroundColor: '#f3f4f6',
-    opacity: 0.6,
+    color: colors.textSecondary,
   },
   hint: {
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
-  switchRow: {
+  toggleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  showPasswordText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
+    marginBottom: spacing.lg,
   },
   button: {
     backgroundColor: colors.primary,
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     marginTop: spacing.sm,
   },
   buttonText: {
     color: colors.textPrimary,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   logoutButton: {
     backgroundColor: '#ef4444',
+    marginTop: 0,
+  },
+  showPasswordText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: spacing.sm,
+    marginTop: spacing.md,
+    marginHorizontal: -spacing.xs,
   },
   statCard: {
     width: '48%',
-    backgroundColor: colors.card,
-    padding: spacing.lg,
-    margin: '1%',
-    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    margin: spacing.xs,
   },
   statValue: {
-    fontSize: 36,
+    fontSize: 28,
     fontWeight: 'bold',
     color: colors.textPrimary,
   },
@@ -767,21 +762,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: spacing.xs,
-    textAlign: 'center',
   },
   userCard: {
     backgroundColor: colors.background,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   userCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   userCardName: {
     fontSize: 16,
@@ -789,106 +781,44 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   userCardEmail: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  userCardDetail: {
-    fontSize: 12,
+    fontSize: 14,
     color: colors.textSecondary,
     marginTop: 2,
   },
-  badges: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: spacing.xs,
-  },
-  adminBadgeSmall: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: borderRadius.sm,
-  },
-  adminBadgeTextSmall: {
-    color: colors.textPrimary,
-    fontSize: 10,
-    fontWeight: '600',
-  },
   statusBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: borderRadius.sm,
   },
-  statusActive: {
-    backgroundColor: '#d1fae5',
-  },
-  statusInactive: {
-    backgroundColor: '#fee2e2',
-  },
   statusBadgeText: {
-    fontSize: 10,
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '600',
   },
   userCardActions: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.sm,
   },
-  actionButton: {
+  userActionButton: {
     flex: 1,
     padding: spacing.sm,
     borderRadius: borderRadius.md,
     alignItems: 'center',
   },
-  actionButtonPrimary: {
-    backgroundColor: '#3b82f6',
-  },
-  actionButtonDanger: {
-    backgroundColor: '#ef4444',
-  },
-  actionButtonText: {
-    color: '#ffffff',
+  userActionButtonText: {
     fontSize: 14,
     fontWeight: '600',
   },
-  aboutRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  aboutLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  aboutValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  aboutFooter: {
-    alignItems: 'center',
-    marginTop: spacing.xl,
-    paddingTop: spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  aboutTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  aboutSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  aboutDescription: {
-    fontSize: 12,
-    color: colors.textSecondary,
+  emptyText: {
     textAlign: 'center',
-    lineHeight: 18,
+    color: colors.textSecondary,
+    fontSize: 16,
+    paddingVertical: spacing.xl,
+  },
+  aboutText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.sm,
   },
 });

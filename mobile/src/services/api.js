@@ -3,12 +3,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl } from '../../config';
 
 let apiInstance = null;
+let currentSessionToken = null;
 
 const getApi = async () => {
-  if (!apiInstance) {
+  // Check current tokens
+  const sessionToken = await AsyncStorage.getItem('SESSION_TOKEN');
+  
+  
+  // CRITICAL: Recreate if instance is null OR if session token has changed
+  if (!apiInstance || currentSessionToken !== sessionToken) {
+    
+    currentSessionToken = sessionToken;
     const baseURL = await getApiBaseUrl();
     
-    // Get stored API key and session token
+    // CRITICAL: Get API key and session token EVERY TIME
     const apiKey = await AsyncStorage.getItem('API_KEY');
     const sessionToken = await AsyncStorage.getItem('SESSION_TOKEN');
     
@@ -21,7 +29,7 @@ const getApi = async () => {
       headers['X-API-Key'] = apiKey;
     }
     
-    // Add session token as Bearer token (not cookie - doesn't work in React Native)
+    // Add session token as Bearer token
     if (sessionToken) {
       headers['Authorization'] = `Bearer ${sessionToken}`;
     }
@@ -30,24 +38,18 @@ const getApi = async () => {
       baseURL,
       timeout: 10000,
       headers,
-      withCredentials: false, // Don't use cookies in React Native
+      withCredentials: false,
     });
 
     // Add response interceptor to handle 401 errors
     apiInstance.interceptors.response.use(
       (response) => response,
       async (error) => {
-        if (error.response && error.response.status === 401) {
-          // API key or session missing/invalid
-          const message = error.response.data?.detail || 'Authentication required';
-          
-          // Only log, don't alert - let the app handle it
-          console.log('Auth required:', message);
-          
-          // Clear invalid credentials silently
+        if (error.response && error.response.status === 401) {     
+          // Clear invalid credentials
           await AsyncStorage.removeItem('API_KEY');
           await AsyncStorage.removeItem('SESSION_TOKEN');
-          apiInstance = null; // Reset instance
+          apiInstance = null;
         }
         return Promise.reject(error);
       }
@@ -56,9 +58,10 @@ const getApi = async () => {
   return apiInstance;
 };
 
-// Reset API instance when URL or API key changes
+// Reset API instance when URL or credentials change
 export const resetApiInstance = () => {
   apiInstance = null;
+  currentSessionToken = null;
 };
 
 // Set API key and reset instance
@@ -68,7 +71,7 @@ export const setApiKey = async (apiKey) => {
   } else {
     await AsyncStorage.removeItem('API_KEY');
   }
-  resetApiInstance(); // Force recreation with new key
+  resetApiInstance();
 };
 
 // Get current API key
@@ -89,7 +92,7 @@ export const checkAuthStatus = async () => {
     const response = await api.get('/api/auth/status');
     return response.data;
   } catch (error) {
-    console.error('Failed to check auth status:', error);
+    
     return { auth_mode: 'unknown', requires_api_key: false };
   }
 };

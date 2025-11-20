@@ -111,13 +111,35 @@ async def verify_smart_auth(
 ):
     """
     Smart authentication mode:
-    - Local network (192.168.x.x, 10.x.x.x, etc.) → Allow without auth
-    - External network → Require API key OR session
-    - API keys always work regardless of network
+    - FIRST: Check for API key or session token (explicit authentication)
+    - LAST: Fall back to trusted network check (implicit authentication)
+    - External network without auth → Reject
+    
+    This order ensures that logged-in users on trusted networks use their
+    session credentials instead of being treated as anonymous trusted users.
     """
     client_ip = get_client_ip(request)
     
-    # Check if from trusted network (home network)
+    # FIRST: Try API key (always works, takes priority)
+    if x_api_key:
+        key_info = validate_api_key(x_api_key)
+        if key_info:
+            return {"type": "api_key", "trusted": is_trusted_network(client_ip), **key_info}
+    
+    # SECOND: Try session token from Authorization header (mobile)
+    if authorization and authorization.startswith('Bearer '):
+        token = authorization.replace('Bearer ', '')
+        user_info = validate_session(token)
+        if user_info:
+            return {"type": "session", "trusted": is_trusted_network(client_ip), **user_info}
+    
+    # THIRD: Try session token from cookie (web)
+    if session_token:
+        user_info = validate_session(session_token)
+        if user_info:
+            return {"type": "session", "trusted": is_trusted_network(client_ip), **user_info}
+    
+    # LAST: Check if from trusted network (allow without explicit auth)
     if is_trusted_network(client_ip):
         return {
             "type": "trusted_network",
@@ -125,26 +147,6 @@ async def verify_smart_auth(
             "client_ip": client_ip,
             "trusted": True
         }
-    
-    # External access - require authentication
-    # Try API key first
-    if x_api_key:
-        key_info = validate_api_key(x_api_key)
-        if key_info:
-            return {"type": "api_key", "trusted": False, **key_info}
-    
-    # Try session token from Authorization header (mobile)
-    if authorization and authorization.startswith('Bearer '):
-        token = authorization.replace('Bearer ', '')
-        user_info = validate_session(token)
-        if user_info:
-            return {"type": "session", "trusted": False, **user_info}
-    
-    # Try session token from cookie (web)
-    if session_token:
-        user_info = validate_session(session_token)
-        if user_info:
-            return {"type": "session", "trusted": False, **user_info}
     
     # External access with no valid auth
     raise HTTPException(
