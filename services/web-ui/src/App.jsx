@@ -1,4 +1,4 @@
-// Main App - With Working Filters
+// Main App - With Working Search
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -17,13 +17,12 @@ function AppContent() {
   const [currentUser, setCurrentUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [filters, setFilters] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
   const { isDark, toggle: toggleDark } = useDarkMode();
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  useEffect(() => { checkAuth(); }, []);
 
   const checkAuth = async () => {
     try {
@@ -36,20 +35,14 @@ function AppContent() {
     }
   };
 
-  const handleLoginSuccess = (user) => {
-    setCurrentUser(user);
-    setShowLanding(false);
-    navigate('/');
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setShowLanding(true);
-    navigate('/');
-  };
-
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
+    setSearchQuery('');
+  };
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (query) setFilters({});
   };
 
   if (checkingAuth) {
@@ -64,33 +57,20 @@ function AppContent() {
   }
 
   if (showLanding) {
-    return <Routes><Route path="*" element={<LandingPage onLoginSuccess={handleLoginSuccess} />} /></Routes>;
+    return <Routes><Route path="*" element={<LandingPage onLoginSuccess={(user) => { setCurrentUser(user); setShowLanding(false); navigate('/'); }} />} /></Routes>;
   }
 
   return (
     <div className="app">
-      <Sidebar 
-        isOpen={sidebarOpen} 
-        currentPath={location.pathname} 
-        onNavigate={navigate} 
-        onFilterChange={handleFilterChange}
-        isDark={isDark} 
-      />
+      <Sidebar isOpen={sidebarOpen} currentPath={location.pathname} onNavigate={navigate} onFilterChange={handleFilterChange} isDark={isDark} />
       <div className="main-content-wrapper">
-        <TopBar 
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
-          currentUser={currentUser} 
-          onLogout={handleLogout} 
-          onSettingsClick={() => navigate('/settings')} 
-          isDark={isDark} 
-          onToggleDark={toggleDark} 
-        />
+        <TopBar onMenuClick={() => setSidebarOpen(!sidebarOpen)} currentUser={currentUser} onLogout={() => { setCurrentUser(null); setShowLanding(true); navigate('/'); }} onSettingsClick={() => navigate('/settings')} isDark={isDark} onToggleDark={toggleDark} onSearch={handleSearch} searchValue={searchQuery} />
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<InventoryTable isDark={isDark} filters={filters} />} />
-            <Route path="/inventory" element={<InventoryTable isDark={isDark} filters={filters} />} />
+            <Route path="/" element={<InventoryTable isDark={isDark} filters={filters} searchQuery={searchQuery} />} />
+            <Route path="/inventory" element={<InventoryTable isDark={isDark} filters={filters} searchQuery={searchQuery} />} />
             <Route path="/add" element={<AddItemPage onBack={() => navigate('/inventory')} isDark={isDark} />} />
-            <Route path="/settings" element={<SettingsPage currentUser={currentUser} onLogout={handleLogout} onBack={() => navigate('/inventory')} />} />
+            <Route path="/settings" element={<SettingsPage currentUser={currentUser} onLogout={() => { setCurrentUser(null); setShowLanding(true); navigate('/'); }} onBack={() => navigate('/inventory')} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

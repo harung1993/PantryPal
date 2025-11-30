@@ -1,23 +1,34 @@
-// TopBar - Minimal Design
-import { Search, Filter, Bell, Settings, User, Moon, Sun } from 'lucide-react';
+// TopBar - With Working Search Bar
+import { Search, Bell, Settings, User, Moon, Sun } from 'lucide-react';
 import { getColors, spacing, borderRadius } from '../colors';
 
-export function TopBar({ onMenuClick, currentUser, onLogout, onSettingsClick, isDark, onToggleDark }) {
+export function TopBar({ onMenuClick, currentUser, onLogout, onSettingsClick, isDark, onToggleDark, onSearch, searchValue }) {
   const colors = getColors(isDark);
 
   return (
     <div style={{ background: colors.card, borderBottom: `1px solid ${colors.border}`, padding: `${spacing.lg} ${spacing.xxl}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.3s ease' }}>
+      {/* Search Box */}
       <div style={{ flex: 1, maxWidth: '600px', position: 'relative' }}>
         <Search size={20} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: colors.textSecondary }} />
-        <input type="text" placeholder="Search items..." style={{ width: '100%', padding: '12px 20px 12px 45px', border: `2px solid ${colors.border}`, borderRadius: borderRadius.lg, fontSize: '15px', background: colors.card, color: colors.textPrimary }} />
+        <input 
+          type="text" 
+          placeholder="Search items..." 
+          value={searchValue || ''}
+          onChange={(e) => onSearch(e.target.value)}
+          style={{ 
+            width: '100%', 
+            padding: '12px 20px 12px 45px', 
+            border: `2px solid ${colors.border}`, 
+            borderRadius: borderRadius.lg, 
+            fontSize: '15px', 
+            background: colors.card, 
+            color: colors.textPrimary 
+          }} 
+        />
       </div>
 
+      {/* Right Actions */}
       <div style={{ display: 'flex', gap: spacing.md, alignItems: 'center' }}>
-        <button style={{ padding: '10px 16px', border: `2px solid ${colors.border}`, background: colors.card, borderRadius: borderRadius.md, cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', color: colors.textPrimary }}>
-          <Filter size={16} />
-          Filter
-        </button>
-
         <button onClick={onToggleDark} style={{ background: 'transparent', border: 'none', padding: '10px', cursor: 'pointer', borderRadius: borderRadius.md, color: colors.primary }} title={isDark ? 'Light mode' : 'Dark mode'}>
           {isDark ? <Sun size={20} /> : <Moon size={20} />}
         </button>
