@@ -1,66 +1,65 @@
-/* Reset and base styles */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* PantryPal Minimal Design with Dark Mode */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #fafaf9;
+  --bg-card: #ffffff;
+  --bg-accent: #fef3c7;
+  --bg-hover: #fafaf9;
+  --text-primary: #292524;
+  --text-secondary: #78716c;
+  --border: #e7e5e4;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-html, body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
+:root.dark {
+  --bg-primary: #0c0a09;
+  --bg-card: #1c1917;
+  --bg-accent: #451a03;
+  --bg-hover: #292524;
+  --text-primary: #fafaf9;
+  --text-secondary: #d6d3d1;
+  --border: #292524;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
-#root {
-  width: 100%;
-  min-height: 100vh;
-  margin: 0;
-  padding: 0;
-}
+html, body, #root { width: 100%; height: 100%; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Ensure inputs and selects don't have weird default styling */
-input, select, textarea, button {
-  font-family: inherit;
-  font-size: inherit;
-}
+.app { display: flex; height: 100vh; }
+.sidebar { width: 280px; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.main-content-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.main-content { flex: 1; overflow-y: auto; }
 
-/* Make sure tables are responsive */
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-/* Smooth transitions for interactive elements */
-button, a {
+input, select, textarea {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
   transition: all 0.2s ease;
 }
 
-/* Scrollbar styling (optional, for webkit browsers) */
-::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
+:root.dark input, :root.dark select, :root.dark textarea { background-color: #292524; }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
-}
+table { background: var(--bg-card); }
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.2s; }
+tbody tr:hover { background: var(--bg-hover); }
+:root.dark tbody tr.expired { background: #450a0a; }
+:root.dark tbody tr.warning { background: #451a03; }
 
-::-webkit-scrollbar-thumb {
-  background: #fbbf24;
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #f97316;
+@media (max-width: 1024px) {
+  .sidebar { position: fixed; left: -280px; z-index: 1000; }
+  .sidebar.open { left: 0; }
 }

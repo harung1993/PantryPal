@@ -46,12 +46,10 @@ const createApiInstance = () => {
   });
 
   // Add response interceptor to handle 401 errors
-  // Note: We don't show alerts here - let the component handle auth errors
   instance.interceptors.response.use(
     (response) => response,
     (error) => {
       if (error.response && error.response.status === 401) {
-        // API key or session missing/invalid
         const message = error.response.data?.detail || 'Authentication required';
         console.error('Authentication error:', message);
         
@@ -79,6 +77,7 @@ export const checkAuthStatus = async () => {
   }
 };
 
+// Get items
 export const getItems = async (location = null, search = null) => {
   const api = createApiInstance();
   const params = {};
@@ -88,40 +87,82 @@ export const getItems = async (location = null, search = null) => {
   return response.data;
 };
 
+// Add item manually
 export const addItemManual = async (itemData) => {
   const api = createApiInstance();
   const response = await api.post('/api/items/manual', itemData);
   return response.data;
 };
 
+// Create item (alias for addItemManual to match the hook)
+export const createItem = async (itemData) => {
+  return addItemManual(itemData);
+};
+
+// Update item
 export const updateItem = async (itemId, updates) => {
   const api = createApiInstance();
   const response = await api.put(`/api/items/${itemId}`, updates);
   return response.data;
 };
 
+// Delete item
 export const deleteItem = async (itemId) => {
   const api = createApiInstance();
   const response = await api.delete(`/api/items/${itemId}`);
   return response.data;
 };
 
+// Get statistics
 export const getStats = async () => {
   const api = createApiInstance();
   const response = await api.get('/api/stats');
   return response.data;
 };
 
+// Get locations
 export const getLocations = async () => {
   const api = createApiInstance();
   const response = await api.get('/api/locations');
   return response.data;
 };
 
+// Get categories
 export const getCategories = async () => {
   const api = createApiInstance();
   const response = await api.get('/api/categories');
   return response.data;
+};
+
+// Get auth mode
+export const getAuthMode = async () => {
+  const api = createApiInstance();
+  try {
+    const response = await api.get('/api/auth/mode');
+    return response.data.mode || 'none';
+  } catch (error) {
+    console.error('Failed to get auth mode:', error);
+    return 'none';
+  }
+};
+
+// Get current user
+export const getCurrentUser = async () => {
+  const api = createApiInstance();
+  const response = await api.get('/api/users/me');
+  return response.data;
+};
+
+// Logout
+export const logout = async () => {
+  const api = createApiInstance();
+  try {
+    await api.post('/api/auth/logout');
+    removeApiKey();
+  } catch (error) {
+    console.error('Logout error:', error);
+    removeApiKey();
+  }
 };
 
 export default { createApiInstance };

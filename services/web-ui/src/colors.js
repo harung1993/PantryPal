@@ -1,75 +1,73 @@
-// PantryPal - Mellower Amber/Orange Theme
-// Softer, more muted version for easier on the eyes
-export const colors = {
-  // Primary brand colors - mellowed down
-  primary: '#f59e0b',        // Amber 500 (instead of 400)
-  primaryDark: '#d97706',    // Amber 600 (for headers/darker elements)
-  secondary: '#fb923c',      // Orange 400 (instead of 500)
-  
-  // Backgrounds - softer tones
-  background: '#fefce8',     // Yellow 50 (softer than amber)
-  card: '#ffffff',           // White
-  lightBackground: '#fef9c3', // Yellow 100
-  
-  // Accent colors (muted warm tones)
-  accentOrange: '#fb923c',   // Orange 400
-  accentAmber: '#f59e0b',    // Amber 500
-  
-  // Text colors (softer neutrals)
-  textPrimary: '#334155',    // Slate 700 (lighter than 800)
-  textSecondary: '#64748b',  // Slate 500 (lighter)
-  textTertiary: '#94a3b8',   // Slate 400
-  textDark: '#92400e',       // Amber 800 (lighter than 900)
-  
-  // Border colors - more subtle
-  border: '#fef9c3',         // Yellow 100
-  borderMedium: '#fef08a',   // Yellow 200
-  borderLight: '#f3f4f6',    // Gray 100
-  
-  // Semantic colors - slightly muted
-  success: '#22c55e',        // Green 500 (less saturated)
-  warning: '#f59e0b',        // Amber 500
-  error: '#f87171',          // Red 400 (softer)
-  info: '#60a5fa',           // Blue 400 (softer)
-  
-  // Legacy color support
-  accent: '#f59e0b',         
-  scanButton: '#fb923c',     
+// Color system with dark mode - Minimal Design Style
+
+export const lightColors = {
+  primary: '#f59e0b',
+  primaryDark: '#d97706',
+  success: '#10b981',
+  danger: '#ef4444',
+  warning: '#f59e0b',
+  info: '#3b82f6',
+  textPrimary: '#292524',
+  textSecondary: '#78716c',
+  textTertiary: '#a8a29e',
+  background: '#fafaf9',
+  card: '#ffffff',
+  cardHover: '#fafaf9',
+  accentBg: '#fef3c7',
+  border: '#e7e5e4',
+  borderDark: '#d6d3d1',
+  expiredBg: '#fef2f2',
+  expiredText: '#dc2626',
+  warningBg: '#fffbeb',
+  warningText: '#f59e0b',
+  goodText: '#10b981',
 };
 
+export const darkColors = {
+  primary: '#fbbf24',
+  primaryDark: '#f59e0b',
+  success: '#34d399',
+  danger: '#f87171',
+  warning: '#fbbf24',
+  info: '#60a5fa',
+  textPrimary: '#fafaf9',
+  textSecondary: '#d6d3d1',
+  textTertiary: '#a8a29e',
+  background: '#0c0a09',
+  card: '#1c1917',
+  cardHover: '#292524',
+  accentBg: '#451a03',
+  border: '#292524',
+  borderDark: '#44403c',
+  expiredBg: '#450a0a',
+  expiredText: '#f87171',
+  warningBg: '#451a03',
+  warningText: '#fbbf24',
+  goodText: '#34d399',
+};
+
+export function getColors(isDark) {
+  return isDark ? darkColors : lightColors;
+}
+
+export const getGradient = (isDark) => ({
+  primary: `linear-gradient(135deg, ${isDark ? '#fbbf24' : '#f59e0b'} 0%, ${isDark ? '#f59e0b' : '#d97706'} 100%)`,
+  success: `linear-gradient(135deg, ${isDark ? '#34d399' : '#10b981'} 0%, #059669 100%)`,
+});
+
+export const getShadows = (isDark) => ({
+  small: isDark ? '0 1px 2px rgba(0, 0, 0, 0.5)' : '0 1px 3px rgba(0, 0, 0, 0.05)',
+  medium: isDark ? '0 2px 8px rgba(0, 0, 0, 0.6)' : '0 2px 8px rgba(0, 0, 0, 0.08)',
+  large: isDark ? '0 4px 16px rgba(0, 0, 0, 0.7)' : '0 4px 12px rgba(217, 119, 6, 0.3)',
+});
+
 export const spacing = {
-  xs: '4px',
-  sm: '8px',
-  md: '16px',
-  lg: '24px',
-  xl: '32px',
-  xxl: '48px',
+  xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '24px', xxl: '32px', xxxl: '48px',
 };
 
 export const borderRadius = {
-  sm: '8px',
-  md: '12px',
-  lg: '16px',
-  xl: '24px',
-  full: '9999px',
+  sm: '6px', md: '8px', lg: '10px', xl: '12px', full: '9999px',
 };
 
-export const shadows = {
-  small: '0 1px 3px rgba(0, 0, 0, 0.08)',    // Softer shadows
-  medium: '0 2px 6px rgba(0, 0, 0, 0.10)',
-  large: '0 4px 12px rgba(0, 0, 0, 0.12)',
-};
-
-// CSS gradient strings - mellower gradients
-export const gradients = {
-  primary: 'linear-gradient(135deg, #fcd34d 0%, #fb923c 100%)',  // Softer amber to orange
-  warm: 'linear-gradient(to bottom right, #fffbeb, #fef9c3, #fef3c7)',  // Very soft warm tones
-};
-
-// Tailwind-style class name equivalents for reference
-export const tailwindClasses = {
-  text: 'text-amber-500, text-orange-400',
-  bg: 'bg-yellow-50, bg-yellow-100',
-  border: 'border-amber-500, border-orange-400',
-  gradient: 'from-amber-300 to-orange-400',
-};
+export const colors = lightColors;
+export default colors;
