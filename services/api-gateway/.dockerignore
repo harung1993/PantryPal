@@ -1,27 +1,23 @@
-# .dockerignore for backend services
-# Place in: services/api-gateway/, services/inventory-service/, services/lookup-service/
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
-build/
-
-# Virtual environments
-venv/
 env/
+venv/
 ENV/
-.venv
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
@@ -31,20 +27,25 @@ Thumbs.db
 .git/
 .gitignore
 
-# Tests
-tests/
-test/
-*.test.py
-pytest_cache/
-
-# Documentation
-*.md
-docs/
+# Data (never include in image)
+data/
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log
 
-# Data files (should be mounted as volumes)
-*.db
-*.sqlite
-data/
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Documentation
+README.md
+*.md
+
+# Tests
+tests/
+test_*.py
+*_test.py

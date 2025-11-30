@@ -1,0 +1,114 @@
+# PantryPal - Docker Compose (Using Docker Hub Images)
+# 
+# This file uses pre-built images from Docker Hub for easy deployment.
+# No need to clone the entire repo or build locally!
+#
+# Quick Start:
+#   1. Download this file
+#   2. Create a .env file (optional, for email notifications)
+#   3. Run: docker-compose up -d
+#   4. Open: http://localhost
+
+version: '3.8'
+
+services:
+  # ===================================
+  # nginx Reverse Proxy
+  # ===================================
+  nginx:
+    image: harung43/pantrypal-nginx:latest
+    container_name: pantrypal-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - api-gateway
+      - web-ui
+    networks:
+      - pantrypal-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # ===================================
+  # API Gateway
+  # ===================================
+  api-gateway:
+    image: harung43/pantrypal-api-gateway:latest
+    container_name: pantrypal-api-gateway
+    environment:
+      - INVENTORY_SERVICE_URL=http://inventory-service:8001
+      - LOOKUP_SERVICE_URL=http://lookup-service:8002
+      - AUTH_MODE=smart  # Options: none, api_key_only, full, smart
+      - TRUSTED_NETWORKS=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,127.0.0.0/8
+      - ALLOW_REGISTRATION=false
+      # Email settings (optional - for password reset)
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-PantryPal}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+    volumes:
+      - ./data:/app/data
+    networks:
+      - pantrypal-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # ===================================
+  # Inventory Service
+  # ===================================
+  inventory-service:
+    image: harung43/pantrypal-inventory-service:latest
+    container_name: pantrypal-inventory-service
+    environment:
+      - DATABASE_URL=sqlite:////app/data/inventory/inventory.db
+    volumes:
+      - ./data/inventory:/app/data/inventory
+    networks:
+      - pantrypal-network
+    restart: unless-stopped
+
+  # ===================================
+  # Lookup Service
+  # ===================================
+  lookup-service:
+    image: harung43/pantrypal-lookup-service:latest
+    container_name: pantrypal-lookup-service
+    environment:
+      - CACHE_DB_PATH=/app/data/lookup_cache/lookup_cache.db
+      - CACHE_TTL_DAYS=30
+    volumes:
+      - ./data/lookup_cache:/app/data/lookup_cache
+    networks:
+      - pantrypal-network
+    restart: unless-stopped
+
+  # ===================================
+  # Web UI (React Dashboard)
+  # ===================================
+  web-ui:
+    image: harung43/pantrypal-web-ui:latest
+    container_name: pantrypal-web-ui
+    environment:
+      - NODE_ENV=production
+    networks:
+      - pantrypal-network
+    restart: unless-stopped
+
+networks:
+  pantrypal-network:
+    driver: bridge
+
+# Default admin credentials:
+# Username: admin
+# Password: admin
+# IMPORTANT: Change these immediately after first login!
