@@ -149,13 +149,14 @@ export default function ManualAddScreen({ navigation }) {
           <Text style={styles.label}>🏷️ Category</Text>
           <View style={styles.pickerContainer}>
             <Picker
-              selectedValue={category}
-              onValueChange={(itemValue) => setCategory(itemValue)}
-              style={styles.picker}
-            >
-              {categories.map((cat) => (
-                <Picker.Item key={cat} label={cat} value={cat} />
-              ))}
+                selectedValue={category}
+                onValueChange={(itemValue) => setCategory(itemValue)}
+                style={styles.picker}
+                itemStyle={styles.pickerItem}
+              >
+                {categories.map((cat) => (
+                  <Picker.Item key={cat} label={cat} value={cat} color={colors.textPrimary} />
+                ))}
             </Picker>
           </View>
         </View>
@@ -167,9 +168,10 @@ export default function ManualAddScreen({ navigation }) {
               selectedValue={location}
               onValueChange={(itemValue) => setLocation(itemValue)}
               style={styles.picker}
+              itemStyle={styles.pickerItem}
             >
               {locations.map((loc) => (
-                <Picker.Item key={loc} label={loc} value={loc} />
+                <Picker.Item key={loc} label={loc} value={loc} color={colors.textPrimary} />
               ))}
             </Picker>
           </View>
@@ -334,9 +336,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border || '#e0e0e0',
   },
   picker: {
     color: colors.textPrimary,
+    height: 150,  // iOS requires explicit height
+    backgroundColor: colors.background,
   },
   quantityContainer: {
     flexDirection: 'row',

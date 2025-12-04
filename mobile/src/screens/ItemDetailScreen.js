@@ -472,10 +472,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
-    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border || '#e0e0e0',
   },
   picker: {
     color: colors.textPrimary,
+    height: 150,
+    backgroundColor: colors.background,
   },
   quantityContainer: {
     flexDirection: 'row',

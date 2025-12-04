@@ -333,12 +333,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   pickerContainer: {
-    backgroundColor: colors.lightBackground,
+    backgroundColor: colors.lightBackground || colors.background,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border || '#e0e0e0',
   },
   picker: {
-    height: 50,
+    height: 150,  // Increased from 50 for better iOS visibility
+    color: colors.textPrimary,
+    backgroundColor: colors.lightBackground || colors.background,
   },
   quantityContainer: {
     flexDirection: 'row',
