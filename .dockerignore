@@ -1,0 +1,38 @@
+# Don't copy these to Docker context
+.git
+.gitignore
+*.md
+README.md
+LICENSE
+TESTING.md
+
+# Data
+data/
+*.db
+*.sqlite
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
+build-multiarch.sh
+build-and-push.sh
+docker-compose-hub.yml
+setup-pantrypal.sh
+start-pantrypal.sh
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Mobile (not needed in backend builds)
+mobile/
+
+# Documentation
+docs/
+*.md

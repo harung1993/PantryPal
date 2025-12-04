@@ -1,25 +1,3 @@
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
 .DS_Store
-Thumbs.db
-
-# Git
-.git/
-.gitignore
-
-# Logs
-*.log
-
-# Documentation
-README.md
 *.md
-
-# Backup files
-*.backup
-*.bak
+README.md

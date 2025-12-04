@@ -19,15 +19,17 @@ app = FastAPI(title="PantryPal API Gateway", version="2.0.0")
 # Get AUTH_MODE for informational purposes
 AUTH_MODE = os.getenv("AUTH_MODE", "none").lower()
 
+# Get CORS origins from environment variable
+cors_origins_env = os.getenv("CORS_ORIGINS", "*")
+if cors_origins_env == "*":
+    cors_origins = ["*"]
+else:
+    # Split comma-separated origins
+    cors_origins = [origin.strip() for origin in cors_origins_env.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1",
-        "http://192.168.68.119",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
