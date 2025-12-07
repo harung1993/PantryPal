@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, Users, Shield, Activity } from 'lucide-react';
-import { colors, spacing, borderRadius } from './colors';
+import { getColors, spacing, borderRadius, getShadows } from './colors';
 import { getDefaultLocations, getDefaultCategories, saveDefaultLocations, saveDefaultCategories, DEFAULT_LOCATIONS, DEFAULT_CATEGORIES } from './defaults';
 import { getItems, addItemManual } from './api';
 
-function SettingsPage({ onBack, currentUser }) {
+function SettingsPage({ onBack, currentUser, isDark }) {
+  const colors = getColors(isDark);
+  const shadows = getShadows(isDark);
   const [activeTab, setActiveTab] = useState('connection');
   
   // Connection settings
@@ -50,6 +52,10 @@ function SettingsPage({ onBack, currentUser }) {
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [newLocation, setNewLocation] = useState('');
   const [newCategory, setNewCategory] = useState('');
+  const [editingLocation, setEditingLocation] = useState(null);
+  const [editLocationValue, setEditLocationValue] = useState('');
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [editCategoryValue, setEditCategoryValue] = useState('');
   
   // Import/Export
   const [exportFilter, setExportFilter] = useState('all');
@@ -398,6 +404,27 @@ function SettingsPage({ onBack, currentUser }) {
     setLocations(locations.filter(l => l !== location));
   };
 
+  const startEditLocation = (location) => {
+    setEditingLocation(location);
+    setEditLocationValue(location);
+  };
+
+  const saveEditLocation = () => {
+    if (editLocationValue.trim() && editLocationValue.trim() !== editingLocation) {
+      const updatedLocations = locations.map(l =>
+        l === editingLocation ? editLocationValue.trim() : l
+      );
+      setLocations(updatedLocations);
+    }
+    setEditingLocation(null);
+    setEditLocationValue('');
+  };
+
+  const cancelEditLocation = () => {
+    setEditingLocation(null);
+    setEditLocationValue('');
+  };
+
   const addCategory = () => {
     if (newCategory.trim() && !categories.includes(newCategory.trim())) {
       setCategories([...categories, newCategory.trim()]);
@@ -407,6 +434,27 @@ function SettingsPage({ onBack, currentUser }) {
 
   const removeCategory = (category) => {
     setCategories(categories.filter(c => c !== category));
+  };
+
+  const startEditCategory = (category) => {
+    setEditingCategory(category);
+    setEditCategoryValue(category);
+  };
+
+  const saveEditCategory = () => {
+    if (editCategoryValue.trim() && editCategoryValue.trim() !== editingCategory) {
+      const updatedCategories = categories.map(c =>
+        c === editingCategory ? editCategoryValue.trim() : c
+      );
+      setCategories(updatedCategories);
+    }
+    setEditingCategory(null);
+    setEditCategoryValue('');
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategory(null);
+    setEditCategoryValue('');
   };
 
   const savePreferences = () => {
@@ -737,7 +785,7 @@ function SettingsPage({ onBack, currentUser }) {
                   border: `2px solid ${colors.border}`,
                   fontSize: '16px',
                   marginBottom: spacing.sm,
-                  backgroundColor: '#ffffff',
+                  backgroundColor: colors.card,
                   color: colors.textPrimary,
                 }}
               />
@@ -809,7 +857,7 @@ function SettingsPage({ onBack, currentUser }) {
                       border: `2px solid ${colors.border}`,
                       fontSize: '16px',
                       marginBottom: spacing.sm,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                       color: colors.textPrimary,
                       fontFamily: 'monospace',
                     }}
@@ -841,8 +889,8 @@ function SettingsPage({ onBack, currentUser }) {
                   padding: spacing.md,
                   borderRadius: borderRadius.md,
                   border: 'none',
-                  background: colors.scanButton,
-                  color: colors.textPrimary,
+                  background: colors.primary,
+                  color: '#ffffff',
                   fontWeight: 'bold',
                   cursor: testing ? 'not-allowed' : 'pointer',
                   opacity: testing ? 0.6 : 1,
@@ -859,8 +907,8 @@ function SettingsPage({ onBack, currentUser }) {
                   padding: spacing.md,
                   borderRadius: borderRadius.md,
                   border: 'none',
-                  background: colors.textSecondary,
-                  color: colors.card,
+                  background: colors.primary,
+                  color: '#ffffff',
                   fontWeight: 'bold',
                   cursor: 'pointer',
                 }}
@@ -955,7 +1003,7 @@ function SettingsPage({ onBack, currentUser }) {
                       borderRadius: borderRadius.md,
                       border: 'none',
                       backgroundColor: '#E5E7EB',
-                      color: '#374151',
+                      color: colors.textPrimary,
                       fontWeight: '600',
                       fontSize: '16px',
                       cursor: 'pointer',
@@ -1007,7 +1055,7 @@ function SettingsPage({ onBack, currentUser }) {
                       border: `2px solid ${colors.border}`,
                       fontSize: '16px',
                       marginBottom: spacing.sm,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                       color: colors.textPrimary,
                     }}
                   />
@@ -1023,7 +1071,7 @@ function SettingsPage({ onBack, currentUser }) {
                       border: `2px solid ${colors.border}`,
                       fontSize: '16px',
                       marginBottom: spacing.sm,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                       color: colors.textPrimary,
                     }}
                   />
@@ -1181,7 +1229,7 @@ function SettingsPage({ onBack, currentUser }) {
                       padding: spacing.md,
                       borderRadius: borderRadius.md,
                       border: `2px solid ${colors.border}`,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                     }}
                   />
                 </div>
@@ -1205,7 +1253,7 @@ function SettingsPage({ onBack, currentUser }) {
                       padding: spacing.md,
                       borderRadius: borderRadius.md,
                       border: `2px solid ${colors.border}`,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                     }}
                   />
                 </div>
@@ -1268,7 +1316,7 @@ function SettingsPage({ onBack, currentUser }) {
                       padding: spacing.md,
                       borderRadius: borderRadius.md,
                       border: `2px solid ${colors.border}`,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                     }}
                   />
                 </div>
@@ -1292,7 +1340,7 @@ function SettingsPage({ onBack, currentUser }) {
                       padding: spacing.md,
                       borderRadius: borderRadius.md,
                       border: `2px solid ${colors.border}`,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                     }}
                   />
                 </div>
@@ -1316,7 +1364,7 @@ function SettingsPage({ onBack, currentUser }) {
                       padding: spacing.md,
                       borderRadius: borderRadius.md,
                       border: `2px solid ${colors.border}`,
-                      backgroundColor: '#ffffff',
+                      backgroundColor: colors.card,
                     }}
                   />
                 </div>
@@ -1488,7 +1536,7 @@ function SettingsPage({ onBack, currentUser }) {
                               <span style={{
                                 padding: '4px 12px',
                                 background: '#f3f4f6',
-                                color: '#374151',
+                                color: colors.textPrimary,
                                 borderRadius: '9999px',
                                 fontSize: '12px',
                                 fontWeight: '600',
@@ -1804,8 +1852,8 @@ function SettingsPage({ onBack, currentUser }) {
                     padding: spacing.lg,
                     borderRadius: borderRadius.lg,
                     border: 'none',
-                    background: exportFilter !== 'all' && !exportValue ? colors.border : colors.accent,
-                    color: colors.textPrimary,
+                    background: exportFilter !== 'all' && !exportValue ? colors.border : colors.primary,
+                    color: '#ffffff',
                     fontWeight: 'bold',
                     cursor: exportFilter !== 'all' && !exportValue ? 'not-allowed' : 'pointer',
                     fontSize: '18px',
@@ -1845,21 +1893,97 @@ function SettingsPage({ onBack, currentUser }) {
                   borderRadius: borderRadius.sm,
                   marginBottom: spacing.xs,
                 }}>
-                  <span style={{ fontSize: '16px', color: colors.textPrimary }}>{location}</span>
-                  <button
-                    onClick={() => removeLocation(location)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      fontSize: '20px',
-                      color: colors.error,
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                      padding: spacing.xs,
-                    }}
-                  >
-                    ✕
-                  </button>
+                  {editingLocation === location ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editLocationValue}
+                        onChange={(e) => setEditLocationValue(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') saveEditLocation();
+                          if (e.key === 'Escape') cancelEditLocation();
+                        }}
+                        autoFocus
+                        style={{
+                          flex: 1,
+                          padding: spacing.sm,
+                          borderRadius: borderRadius.sm,
+                          border: `2px solid ${colors.primary}`,
+                          fontSize: '16px',
+                          backgroundColor: colors.card,
+                          color: colors.textPrimary,
+                          marginRight: spacing.sm,
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: spacing.xs }}>
+                        <button
+                          onClick={saveEditLocation}
+                          style={{
+                            background: colors.primary,
+                            border: 'none',
+                            fontSize: '14px',
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            padding: `${spacing.xs} ${spacing.sm}`,
+                            borderRadius: borderRadius.sm,
+                          }}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={cancelEditLocation}
+                          style={{
+                            background: colors.border,
+                            border: 'none',
+                            fontSize: '14px',
+                            color: colors.textPrimary,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            padding: `${spacing.xs} ${spacing.sm}`,
+                            borderRadius: borderRadius.sm,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '16px', color: colors.textPrimary }}>{location}</span>
+                      <div style={{ display: 'flex', gap: spacing.xs }}>
+                        <button
+                          onClick={() => startEditLocation(location)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '18px',
+                            color: colors.textSecondary,
+                            cursor: 'pointer',
+                            padding: spacing.xs,
+                          }}
+                          title="Edit location"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => removeLocation(location)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '20px',
+                            color: colors.danger,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            padding: spacing.xs,
+                          }}
+                          title="Delete location"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
 
@@ -1876,7 +2000,7 @@ function SettingsPage({ onBack, currentUser }) {
                     borderRadius: borderRadius.md,
                     border: `2px solid ${colors.border}`,
                     fontSize: '16px',
-                    backgroundColor: '#ffffff',
+                    backgroundColor: colors.card,
                     color: colors.textPrimary,
                   }}
                 />
@@ -1886,8 +2010,8 @@ function SettingsPage({ onBack, currentUser }) {
                     padding: `${spacing.sm} ${spacing.lg}`,
                     borderRadius: borderRadius.md,
                     border: 'none',
-                    background: colors.secondary,
-                    color: colors.textPrimary,
+                    background: colors.primary,
+                    color: '#ffffff',
                     fontWeight: 'bold',
                     cursor: 'pointer',
                   }}
@@ -1919,21 +2043,97 @@ function SettingsPage({ onBack, currentUser }) {
                   borderRadius: borderRadius.sm,
                   marginBottom: spacing.xs,
                 }}>
-                  <span style={{ fontSize: '16px', color: colors.textPrimary }}>{category}</span>
-                  <button
-                    onClick={() => removeCategory(category)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      fontSize: '20px',
-                      color: colors.error,
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                      padding: spacing.xs,
-                    }}
-                  >
-                    ✕
-                  </button>
+                  {editingCategory === category ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editCategoryValue}
+                        onChange={(e) => setEditCategoryValue(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') saveEditCategory();
+                          if (e.key === 'Escape') cancelEditCategory();
+                        }}
+                        autoFocus
+                        style={{
+                          flex: 1,
+                          padding: spacing.sm,
+                          borderRadius: borderRadius.sm,
+                          border: `2px solid ${colors.primary}`,
+                          fontSize: '16px',
+                          backgroundColor: colors.card,
+                          color: colors.textPrimary,
+                          marginRight: spacing.sm,
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: spacing.xs }}>
+                        <button
+                          onClick={saveEditCategory}
+                          style={{
+                            background: colors.primary,
+                            border: 'none',
+                            fontSize: '14px',
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            padding: `${spacing.xs} ${spacing.sm}`,
+                            borderRadius: borderRadius.sm,
+                          }}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={cancelEditCategory}
+                          style={{
+                            background: colors.border,
+                            border: 'none',
+                            fontSize: '14px',
+                            color: colors.textPrimary,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            padding: `${spacing.xs} ${spacing.sm}`,
+                            borderRadius: borderRadius.sm,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '16px', color: colors.textPrimary }}>{category}</span>
+                      <div style={{ display: 'flex', gap: spacing.xs }}>
+                        <button
+                          onClick={() => startEditCategory(category)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '18px',
+                            color: colors.textSecondary,
+                            cursor: 'pointer',
+                            padding: spacing.xs,
+                          }}
+                          title="Edit category"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => removeCategory(category)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '20px',
+                            color: colors.danger,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            padding: spacing.xs,
+                          }}
+                          title="Delete category"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
 
@@ -1950,7 +2150,7 @@ function SettingsPage({ onBack, currentUser }) {
                     borderRadius: borderRadius.md,
                     border: `2px solid ${colors.border}`,
                     fontSize: '16px',
-                    backgroundColor: '#ffffff',
+                    backgroundColor: colors.card,
                     color: colors.textPrimary,
                   }}
                 />
@@ -1960,8 +2160,8 @@ function SettingsPage({ onBack, currentUser }) {
                     padding: `${spacing.sm} ${spacing.lg}`,
                     borderRadius: borderRadius.md,
                     border: 'none',
-                    background: colors.secondary,
-                    color: colors.textPrimary,
+                    background: colors.primary,
+                    color: '#ffffff',
                     fontWeight: 'bold',
                     cursor: 'pointer',
                   }}
@@ -2038,6 +2238,7 @@ function SettingsPage({ onBack, currentUser }) {
               textAlign: 'center',
               marginTop: spacing.xl,
               paddingTop: spacing.xl,
+              borderTop: `1px solid ${colors.border}`,
             }}>
               <div style={{ fontSize: '32px', marginBottom: spacing.sm }}>🥫</div>
               <div style={{ fontSize: '20px', fontWeight: 'bold', color: colors.textPrimary }}>
@@ -2046,6 +2247,43 @@ function SettingsPage({ onBack, currentUser }) {
               <div style={{ fontSize: '14px', color: colors.textSecondary, marginTop: spacing.xs }}>
                 Self-hosted pantry management
               </div>
+            </div>
+
+            <div style={{
+              marginTop: spacing.xl,
+              paddingTop: spacing.xl,
+              borderTop: `1px solid ${colors.border}`,
+            }}>
+              <h3 style={{
+                marginTop: 0,
+                marginBottom: spacing.md,
+                color: colors.textPrimary,
+                fontSize: '18px',
+              }}>
+                Part of PalStack
+              </h3>
+              <p style={{
+                color: colors.textSecondary,
+                lineHeight: 1.6,
+                marginBottom: spacing.md,
+              }}>
+                PantryPal is part of the <strong style={{ color: colors.textPrimary }}>PalStack</strong> family of self-hosted applications designed to simplify everyday life.
+              </p>
+              <p style={{
+                color: colors.textSecondary,
+                lineHeight: 1.6,
+                fontStyle: 'italic',
+                marginBottom: spacing.md,
+              }}>
+                "That's what pals do – they show up and help with the everyday stuff."
+              </p>
+              <p style={{
+                color: colors.textSecondary,
+                lineHeight: 1.6,
+                fontSize: '14px',
+              }}>
+                PalStack is a collection of practical, privacy-focused tools that help you manage your home, track your inventory, and organize your life – all on your own terms, hosted wherever you choose.
+              </p>
             </div>
           </div>
         )}

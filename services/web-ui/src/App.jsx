@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
-import InventoryTable from './pages/InventoryTable';
+import InventoryPage from './pages/InventoryPage';
 import AddItemPage from './pages/AddItemPage';
 import SettingsPage from './SettingsPage';
 import LandingPage from './LandingPage';
@@ -67,10 +67,10 @@ function AppContent() {
         <TopBar onMenuClick={() => setSidebarOpen(!sidebarOpen)} currentUser={currentUser} onLogout={() => { setCurrentUser(null); setShowLanding(true); navigate('/'); }} onSettingsClick={() => navigate('/settings')} isDark={isDark} onToggleDark={toggleDark} onSearch={handleSearch} searchValue={searchQuery} />
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<InventoryTable isDark={isDark} filters={filters} searchQuery={searchQuery} />} />
-            <Route path="/inventory" element={<InventoryTable isDark={isDark} filters={filters} searchQuery={searchQuery} />} />
+            <Route path="/" element={<InventoryPage isDark={isDark} filters={filters} searchQuery={searchQuery} />} />
+            <Route path="/inventory" element={<InventoryPage isDark={isDark} filters={filters} searchQuery={searchQuery} />} />
             <Route path="/add" element={<AddItemPage onBack={() => navigate('/inventory')} isDark={isDark} />} />
-            <Route path="/settings" element={<SettingsPage currentUser={currentUser} onLogout={() => { setCurrentUser(null); setShowLanding(true); navigate('/'); }} onBack={() => navigate('/inventory')} />} />
+            <Route path="/settings" element={<SettingsPage currentUser={currentUser} onLogout={() => { setCurrentUser(null); setShowLanding(true); navigate('/'); }} onBack={() => navigate('/inventory')} isDark={isDark} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

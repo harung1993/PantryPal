@@ -1,26 +1,24 @@
 // Inventory page - full item list with filtering and bulk actions
-import { useState } from 'react';
-import { Download, Upload } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 import FilterPanel from '../components/FilterPanel';
 import BulkActions from '../components/BulkActions';
 import LoadingSpinner from '../components/LoadingSpinner';
-import Modal from '../components/Modal';
 import Alert from '../components/Alert';
 import { colors, spacing, borderRadius } from '../colors';
 import { useItems } from '../hooks/useItems';
 import { useLocations } from '../hooks/useLocations';
-import { exportToCSV, downloadCSVTemplate, readCSVFile, validateImportedItems } from '../utils/exportUtils';
+import { exportToCSV } from '../utils/exportUtils';
 import { filterByExpiryStatus, sortByExpiry } from '../utils/dateUtils';
 
-export function InventoryPage() {
-  const { items, loading, error, removeItems, addItem } = useItems();
+export function InventoryPage({ isDark }) {
+  const { items, loading, error, removeItems } = useItems();
   const { locations, categories } = useLocations();
   const [filters, setFilters] = useState({ expiryStatus: 'all' });
   const [selectedItems, setSelectedItems] = useState(new Set());
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [importError, setImportError] = useState(null);
   const [groupBy, setGroupBy] = useState('none');
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
 
   // Apply filters
   const filteredItems = items.filter(item => {
@@ -49,6 +47,43 @@ export function InventoryPage() {
     setFilters(prev => ({ ...prev, ...newFilters }));
   };
 
+  const toggleGroup = (groupKey) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  };
+
+  // Collapse all groups by default when grouping changes
+  useEffect(() => {
+    if (groupBy !== 'none') {
+      const allGroupKeys = Object.keys(groupedItems);
+      setCollapsedGroups(new Set(allGroupKeys));
+    } else {
+      setCollapsedGroups(new Set());
+    }
+  }, [groupBy]);
+
+  // Auto-expand groups when search is active and has matches
+  useEffect(() => {
+    if (filters.search && groupBy !== 'none') {
+      const groupsWithMatches = Object.entries(groupedItems)
+        .filter(([_, items]) => items.length > 0)
+        .map(([key, _]) => key);
+
+      setCollapsedGroups(prev => {
+        const next = new Set(prev);
+        groupsWithMatches.forEach(key => next.delete(key));
+        return next;
+      });
+    }
+  }, [filters.search, groupedItems, groupBy]);
+
   const handleSelect = (item) => {
     setSelectedItems(prev => {
       const next = new Set(prev);
@@ -74,93 +109,12 @@ export function InventoryPage() {
     exportToCSV(selected.length > 0 ? selected : items);
   };
 
-  const handleImport = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      const importedItems = await readCSVFile(file);
-      const validation = validateImportedItems(importedItems);
-      
-      if (!validation.isValid) {
-        setImportError(validation.errors.join(', '));
-        return;
-      }
-
-      for (const item of importedItems) {
-        await addItem(item);
-      }
-      
-      setShowImportModal(false);
-      alert(`Successfully imported ${importedItems.length} items`);
-    } catch (err) {
-      setImportError(err.message);
-    }
-  };
-
   if (loading) return <LoadingSpinner />;
 
   return (
     <div style={{ padding: spacing.xl }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl }}>
+      <div style={{ marginBottom: spacing.xl }}>
         <h1 style={{ margin: 0, fontSize: '32px', fontWeight: 'bold' }}>Inventory</h1>
-        <div style={{ display: 'flex', gap: spacing.md }}>
-          <button
-            onClick={() => downloadCSVTemplate()}
-            style={{
-              background: 'none',
-              border: `2px solid ${colors.border}`,
-              padding: `${spacing.md} ${spacing.lg}`,
-              borderRadius: borderRadius.md,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: spacing.sm,
-              fontSize: '14px',
-            }}
-          >
-            <Download size={18} />
-            Template
-          </button>
-          <button
-            onClick={() => setShowImportModal(true)}
-            style={{
-              background: colors.info,
-              border: 'none',
-              padding: `${spacing.md} ${spacing.lg}`,
-              borderRadius: borderRadius.md,
-              color: 'white',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: spacing.sm,
-              fontSize: '14px',
-              fontWeight: '500',
-            }}
-          >
-            <Upload size={18} />
-            Import CSV
-          </button>
-          <button
-            onClick={handleExport}
-            style={{
-              background: colors.success,
-              border: 'none',
-              padding: `${spacing.md} ${spacing.lg}`,
-              borderRadius: borderRadius.md,
-              color: 'white',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: spacing.sm,
-              fontSize: '14px',
-              fontWeight: '500',
-            }}
-          >
-            <Download size={18} />
-            Export CSV
-          </button>
-        </div>
       </div>
 
       {error && <Alert type="error" message={error} />}
@@ -170,6 +124,7 @@ export function InventoryPage() {
         onFilterChange={handleFilterChange}
         locations={locations}
         categories={categories}
+        isDark={isDark}
       />
 
       <div style={{ display: 'flex', gap: spacing.md, marginBottom: spacing.lg }}>
@@ -181,27 +136,56 @@ export function InventoryPage() {
         </select>
       </div>
 
-      {Object.entries(groupedItems).map(([group, groupItems]) => (
-        <div key={group} style={{ marginBottom: spacing.xxl }}>
-          {groupBy !== 'none' && (
-            <h2 style={{ marginBottom: spacing.lg, fontSize: '20px', fontWeight: 'bold', color: colors.textSecondary }}>
-              {group} ({groupItems.length})
-            </h2>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: spacing.lg }}>
-            {groupItems.map(item => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                isSelected={selectedItems.has(item.id)}
-                onSelect={handleSelect}
-                onEdit={() => {}}
-                onDelete={() => removeItems([item.id])}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+      {Object.entries(groupedItems)
+        .filter(([_, groupItems]) => groupItems.length > 0)
+        .map(([group, groupItems]) => {
+          const isCollapsed = collapsedGroups.has(group);
+          const Icon = isCollapsed ? ChevronRight : ChevronDown;
+
+          return (
+            <div key={group} style={{ marginBottom: spacing.xxl }}>
+              {groupBy !== 'none' && (
+                <div
+                  onClick={() => toggleGroup(group)}
+                  style={{
+                    marginBottom: spacing.lg,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: spacing.sm,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    padding: spacing.md,
+                    borderRadius: borderRadius.md,
+                    transition: 'background-color 0.2s',
+                    backgroundColor: isCollapsed ? colors.background : 'transparent',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.background}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isCollapsed ? colors.background : 'transparent'}
+                >
+                  <Icon size={20} color={colors.textSecondary} />
+                  <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: colors.textSecondary }}>
+                    {group} ({groupItems.length})
+                  </h2>
+                </div>
+              )}
+              {!isCollapsed && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: spacing.lg }}>
+                  {groupItems.map(item => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      isSelected={selectedItems.has(item.id)}
+                      onSelect={handleSelect}
+                      onEdit={() => {}}
+                      onDelete={() => removeItems([item.id])}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
+      }
 
       {sortedItems.length === 0 && (
         <div style={{ textAlign: 'center', padding: spacing.xxxl, color: colors.textSecondary }}>
@@ -215,17 +199,6 @@ export function InventoryPage() {
         onExport={handleExport}
         onClear={() => setSelectedItems(new Set())}
       />
-
-      <Modal isOpen={showImportModal} onClose={() => setShowImportModal(false)} title="Import Items from CSV">
-        {importError && <Alert type="error" message={importError} onClose={() => setImportError(null)} />}
-        <div style={{ marginBottom: spacing.lg }}>
-          <p>Upload a CSV file with your pantry items. Make sure it includes at least a "Name" column.</p>
-          <p style={{ fontSize: '14px', color: colors.textSecondary, marginTop: spacing.sm }}>
-            Download the template first if you need a reference format.
-          </p>
-        </div>
-        <input type="file" accept=".csv" onChange={handleImport} style={{ width: '100%', padding: spacing.md }} />
-      </Modal>
     </div>
   );
 }
