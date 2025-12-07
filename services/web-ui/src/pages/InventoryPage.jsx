@@ -10,8 +10,9 @@ import Alert from '../components/Alert';
 import { colors, spacing, borderRadius } from '../colors';
 import { useItems } from '../hooks/useItems';
 import { useLocations } from '../hooks/useLocations';
-import { exportToCSV, downloadCSVTemplate, readCSVFile, validateImportedItems } from '../utils/exportUtils';
+import { downloadCSVTemplate, readCSVFile, validateImportedItems } from '../utils/exportUtils';
 import { filterByExpiryStatus, sortByExpiry } from '../utils/dateUtils';
+import { exportItemsCSV } from '../api';
 
 export function InventoryPage() {
   const { items, loading, error, removeItems, addItem } = useItems();
@@ -69,9 +70,12 @@ export function InventoryPage() {
     }
   };
 
-  const handleExport = () => {
-    const selected = items.filter(item => selectedItems.has(item.id));
-    exportToCSV(selected.length > 0 ? selected : items);
+  const handleExport = async () => {
+    try {
+      await exportItemsCSV();
+    } catch (err) {
+      alert('Failed to export items');
+    }
   };
 
   const handleImport = async (e) => {
