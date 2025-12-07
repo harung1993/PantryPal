@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.palstack.pantrypal",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSCameraUsageDescription": "PantryPal needs camera access to scan barcodes on your pantry items.",
         "NSPhotoLibraryUsageDescription": "PantryPal needs photo library access to save item images.",

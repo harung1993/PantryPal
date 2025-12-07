@@ -44,6 +44,7 @@ services:
       - AUTH_MODE=smart  # Options: none, api_key_only, full, smart
       - TRUSTED_NETWORKS=192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,127.0.0.0/8
       - ALLOW_REGISTRATION=false
+      - CORD=*  # Change this to restrict frontend origins
       # Email settings (optional - for password reset)
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}

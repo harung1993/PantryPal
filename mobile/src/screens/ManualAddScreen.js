@@ -244,13 +244,17 @@ export default function ManualAddScreen({ navigation }) {
           )}
 
           {showDatePicker && (
-            <DateTimePicker
-              value={expiryDate || new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
+            <View style={styles.datePickerWrapper}>
+              <DateTimePicker
+                value={expiryDate || new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+                textColor={colors.textPrimary}
+                themeVariant="light"
+              />
+            </View>
           )}
         </View>
 
@@ -344,6 +348,10 @@ const styles = StyleSheet.create({
     height: 150,  // iOS requires explicit height
     backgroundColor: colors.background,
   },
+  pickerItem: {
+    color: colors.textPrimary,
+    fontSize: 18,
+  },
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -414,6 +422,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.error,
     fontWeight: '600',
+  },
+  datePickerWrapper: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginTop: spacing.sm,
   },
   addButton: {
     backgroundColor: colors.primary,

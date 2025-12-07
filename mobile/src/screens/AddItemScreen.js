@@ -124,9 +124,10 @@ export default function AddItemScreen({ route, navigation }) {
               selectedValue={location}
               onValueChange={(itemValue) => setLocation(itemValue)}
               style={styles.picker}
+              itemStyle={styles.pickerItem}
             >
               {locations.map((loc) => (
-                <Picker.Item key={loc} label={loc} value={loc} />
+                <Picker.Item key={loc} label={loc} value={loc} color={colors.textPrimary} />
               ))}
             </Picker>
           </View>
@@ -218,13 +219,17 @@ export default function AddItemScreen({ route, navigation }) {
           )}
 
           {showDatePicker && (
-            <DateTimePicker
-              value={expiryDate || new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
+            <View style={styles.datePickerWrapper}>
+              <DateTimePicker
+                value={expiryDate || new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+                textColor={colors.textPrimary}
+                themeVariant="light"
+              />
+            </View>
           )}
         </View>
 
@@ -344,6 +349,10 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     backgroundColor: colors.lightBackground || colors.background,
   },
+  pickerItem: {
+    color: colors.textPrimary,
+    fontSize: 18,
+  },
   quantityContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -418,6 +427,12 @@ const styles = StyleSheet.create({
   clearDateText: {
     color: colors.textSecondary,
     fontSize: 14,
+  },
+  datePickerWrapper: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginTop: spacing.sm,
   },
   saveButtonGradient: {
     borderRadius: borderRadius.lg,
